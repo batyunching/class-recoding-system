@@ -76,7 +76,7 @@
           <p class="text-xs text-slate-500 flex items-center space-x-1.5">
             <span>數位觀課與課堂智慧紀錄分析系統</span>
             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-              改版：2026/09/24 09:55 (修復雲端照片顯示與跨端預覽)
+              改版：2026/09/24 11:00 (原生 PDF 雲端直接預覽與 Word 雙軌支援)
             </span>
           </p>
         </div>
@@ -342,7 +342,7 @@
             <p class="text-xs text-slate-500 mt-1">內含學校標準抬頭、基本資料表格、時間質性紀錄、AI雙軌分析、議課心得空白框與雙師簽名欄。</p>
 
             <div class="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600">
-              預計檔名：<span id="exportDocName" class="font-mono text-cyan-800 font-semibold">1150924-黃雲清老師-新北市立大觀國民中學數位觀課記錄表</span>
+              預計檔名：<span id="exportDocName" class="font-mono text-cyan-800 font-semibold">1150924-黃雲清老師-8年2班-李小美老師-數位觀課記錄表</span>
             </div>
           </div>
 
@@ -374,7 +374,7 @@
 
             <div class="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
               <div class="text-slate-600">指定母資料夾：<code class="text-cyan-800 font-mono">1xLAmgsKMO32lweFjC39RCVBsfaM0xoQr</code></div>
-              <div class="text-slate-600">專屬子資料夾：<b id="cloudSubfolderName" class="text-slate-800">1150924-黃雲清老師</b></div>
+              <div class="text-slate-600">專屬子資料夾：<b id="cloudSubfolderName" class="text-slate-800">1150924-黃雲清老師-8年2班-李小美老師</b></div>
               <div id="audioStatusText" class="font-medium text-slate-700">錄音檔狀態：檢查中...</div>
               <audio id="audioPreviewPlayer" controls class="w-full mt-2 hidden"></audio>
             </div>
@@ -406,6 +406,31 @@
     </section>
 
   </main>
+
+  <!-- 未同步防呆詢問視窗 -->
+  <div id="unsyncedConfirmModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-100">
+      <div class="flex items-center space-x-2.5 text-amber-600">
+        <span class="text-2xl">⚠️</span>
+        <h3 class="text-base font-bold text-slate-900">觀課紀錄尚未同步至雲端硬碟！</h3>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed">
+        偵測到本次觀課產生的<b>錄音檔、Word 與 PDF 紀錄表</b>尚未同步至 Google 雲端硬碟母資料夾。
+        若直接開始下一堂課，前次資料將會被覆蓋！
+      </p>
+      <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 font-medium">
+        建議點擊下方<b>「自動同步並開始下一堂」</b>，系統將替您自動完成雲端歸檔後立即開新課程。
+      </div>
+      <div class="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-2">
+        <button id="btnModalDiscardAndNew" type="button" class="px-4 py-2 border border-slate-300 text-slate-600 hover:bg-slate-100 rounded-xl text-xs font-semibold transition">
+          放棄同步，直接下一堂
+        </button>
+        <button id="btnModalSyncAndNew" type="button" class="px-5 py-2.5 bg-cyan-700 hover:bg-cyan-800 text-white rounded-xl text-xs font-bold shadow transition flex items-center justify-center space-x-1">
+          <span>☁️ 自動同步並開始下一堂</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- 內嵌即時拍照視窗 (完全在網頁內取景，錄音絕不中斷) -->
   <div id="inAppCameraModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex flex-col items-center justify-center p-3 sm:p-5">
@@ -505,6 +530,7 @@
       recordedChunks: [],
       audioBlob: null,
       audioDurationSeconds: 0,
+      hasSyncedCloud: false, // 追蹤本次觀課是否已成功同步至雲端
       durationSource: 'none',
       analysisScope: 'VERY_SHORT_CLIP',
       scopeLabel: '極短片段／測試錄音',
@@ -1124,46 +1150,64 @@
       appState.aiGrowth = growth;
       appState.aiSuggestions = suggestions;
 
-      document.getElementById('editAiStrengths').value = strengths;
-      document.getElementById('editAiGrowth').value = growth;
-      document.getElementById('editAiSuggestions').value = suggestions;
-      autoSaveStateToLocalStorage();
+      var edS = document.getElementById('editAiStrengths');
+      var edG = document.getElementById('editAiGrowth');
+      var edR = document.getElementById('editAiSuggestions');
+      if (edS) edS.value = strengths;
+      if (edG) edG.value = growth;
+      if (edR) edR.value = suggestions;
     }
 
-    function saveEditsAndProceedToExport() {
-      appState.aiStrengths = document.getElementById('editAiStrengths').value;
-      appState.aiGrowth = document.getElementById('editAiGrowth').value;
-      appState.aiSuggestions = document.getElementById('editAiSuggestions').value;
-
-      var docName = (appState.obsDate || '1150924') + '-' + (appState.teacherName || '授課教師') + '-新北市立大觀國民中學數位觀課記錄表';
-      document.getElementById('exportDocName').innerText = docName;
-      document.getElementById('cloudSubfolderName').innerText = (appState.obsDate || '1150924') + '-' + (appState.teacherName || '授課教師');
-
-      updateAudioStatusInStep4();
-      goToStep(4);
+    function getStandardNamingBase() {
+      var d = appState.obsDate || '觀課';
+      var t = appState.teacherName || '授課教師';
+      var c = appState.className || '班級';
+      var o = appState.observerName || '觀課教師';
+      return d + '-' + t + '-' + c + '-' + o;
     }
 
     function updateAudioStatusInStep4() {
       var statusText = document.getElementById('audioStatusText');
       var player = document.getElementById('audioPreviewPlayer');
-      if (!statusText) return;
-
-      if (appState.audioBlob && appState.audioBlob.size > 0) {
-        var sizeMb = (appState.audioBlob.size / (1024 * 1024)).toFixed(2);
-        statusText.innerText = '錄音檔狀態：✅ 已就緒 (' + sizeMb + ' MB)';
-        statusText.className = 'font-bold text-emerald-700';
-        if (player) {
-          player.src = URL.createObjectURL(appState.audioBlob);
-          player.classList.remove('hidden');
+      getReadyAudioBlob().then(function(blob) {
+        if (blob && blob.size > 0) {
+          var mb = (blob.size / (1024 * 1024)).toFixed(2);
+          if (statusText) statusText.innerHTML = '錄音檔狀態：<span class="text-emerald-600 font-bold">✅ 已就緒 (' + mb + ' MB)</span>';
+          if (player) {
+            player.src = URL.createObjectURL(blob);
+            player.classList.remove('hidden');
+          }
+        } else {
+          if (statusText) statusText.innerText = '錄音檔狀態：未錄音';
+          if (player) {
+            player.classList.add('hidden');
+            player.src = '';
+          }
         }
-      } else {
-        statusText.innerText = '錄音檔狀態：未錄音或處理中';
-        statusText.className = 'font-medium text-slate-500';
-        if (player) player.classList.add('hidden');
-      }
+      });
     }
 
-    function buildStandardHtmlReport() {
+    function saveEditsAndProceedToExport() {
+      var edS = document.getElementById('editAiStrengths');
+      var edG = document.getElementById('editAiGrowth');
+      var edR = document.getElementById('editAiSuggestions');
+      if (edS) appState.aiStrengths = edS.value;
+      if (edG) appState.aiGrowth = edG.value;
+      if (edR) appState.aiSuggestions = edR.value;
+
+      var docName = getStandardNamingBase() + '-數位觀課記錄表';
+      var exportDocEl = document.getElementById('exportDocName');
+      if (exportDocEl) exportDocEl.innerText = docName;
+
+      var subFolderEl = document.getElementById('cloudSubfolderName');
+      if (subFolderEl) subFolderEl.innerText = getStandardNamingBase();
+
+      updateAudioStatusInStep4();
+      goToStep(4);
+      autoSaveStateToLocalStorage();
+    }
+
+    function buildStandardHtmlReport(isForWord) {
       var recordsRows = appState.records.length > 0 ? appState.records.map(function(r) {
         return '<tr>' +
           '<td style="border: 1px solid #000; padding: 6px; text-align: center; width: 90px; font-weight: bold; font-family: monospace;">' + escapeHtml(r.timestamp) + '</td>' +
@@ -1174,19 +1218,30 @@
       var photosHtmlSection = '';
       if (appState.photos.length > 0) {
         var photoCards = appState.photos.map(function(p, i) {
-          var imgSrc = p.driveUrl || p.base64;
-          return '<div style="display: inline-block; width: 48%; margin: 1%; vertical-align: top; border: 1px solid #cbd5e1; padding: 8px; box-sizing: border-box; background: #f8fafc; text-align: center; border-radius: 8px;">' +
-            '<img src="' + imgSrc + '" style="max-width: 100%; height: 180px; object-fit: contain; display: block; margin: 0 auto; border-radius: 4px; background: #ffffff;" alt="課堂現場照片佐證">' +
+          var imgSrc = isForWord ? ('daguan_photo_' + i + '.jpg') : p.base64;
+          return '<td style="width: 48%; padding: 8px; vertical-align: top; text-align: center; border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 8px;">' +
+            '<img src="' + imgSrc + '" width="300" style="width: 100%; max-width: 320px; height: 180px; object-fit: contain; display: block; margin: 0 auto; border-radius: 4px; background: #ffffff;" alt="課堂現場照片佐證">' +
             '<div style="font-size: 9pt; color: #1e293b; margin-top: 6px; font-weight: bold;">照片 ' + (i + 1) + ' [' + escapeHtml(p.timestamp) + '] ' + escapeHtml(p.note) + '</div>' +
-            '</div>';
-        }).join('');
+            '{{PHOTO_LINK_' + i + '}}' +
+            '</td>';
+        });
+
+        // 兩兩一列封裝至表格中，完美支援 Google PDF 與 Word 轉換
+        var photoRows = '';
+        for (var k = 0; k < photoCards.length; k += 2) {
+          var td1 = photoCards[k];
+          var td2 = (k + 1 < photoCards.length) ? photoCards[k + 1] : '<td style="width: 48%; border: none;"></td>';
+          photoRows += '<tr>' + td1 + '<td style="width: 4%; border: none;"></td>' + td2 + '</tr><tr style="height: 10px;"><td colspan="3" style="border: none;"></td></tr>';
+        }
 
         photosHtmlSection = '<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 10pt;">' +
           '<tr style="background-color: #0e7490; color: #fff;">' +
           '<th style="border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 11pt;">附錄：課堂教學現場影像佐證 (' + appState.photos.length + ' 張)</th>' +
           '</tr>' +
           '<tr>' +
-          '<td style="border: 1px solid #000; padding: 10px;">' + photoCards + '</td>' +
+          '<td style="border: 1px solid #000; padding: 10px;">' +
+          '<table style="width: 100%; border-collapse: collapse; border: none;">' + photoRows + '</table>' +
+          '</td>' +
           '</tr>' +
           '</table>';
       }
@@ -1263,19 +1318,52 @@
         '</td>' +
         '</tr>' +
         '</table>' +
-        '<div style="display: flex; justify-content: space-between; margin-top: 30px; padding: 0 20px; font-size: 11pt; font-weight: bold;">' +
-        '<div>授課教師簽名：____________________（日期：&nbsp;&nbsp;&nbsp;&nbsp;年&nbsp;&nbsp;&nbsp;&nbsp;月&nbsp;&nbsp;&nbsp;&nbsp;日）</div>' +
-        '<div>觀課教師簽名：____________________（日期：&nbsp;&nbsp;&nbsp;&nbsp;年&nbsp;&nbsp;&nbsp;&nbsp;月&nbsp;&nbsp;&nbsp;&nbsp;日）</div>' +
-        '</div>' +
+        '<table style="width: 100%; border-collapse: collapse; border: none; margin-top: 25px; font-size: 11pt; font-weight: bold;">' +
+        '<tr>' +
+        '<td style="width: 50%; border: none; padding: 0;">授課教師簽名：____________________<br><span style="font-size: 9.5pt; font-weight: normal; color: #555;">（日期：&nbsp;&nbsp;&nbsp;&nbsp;年&nbsp;&nbsp;&nbsp;&nbsp;月&nbsp;&nbsp;&nbsp;&nbsp;日）</span></td>' +
+        '<td style="width: 50%; border: none; padding: 0;">觀課教師簽名：____________________<br><span style="font-size: 9.5pt; font-weight: normal; color: #555;">（日期：&nbsp;&nbsp;&nbsp;&nbsp;年&nbsp;&nbsp;&nbsp;&nbsp;月&nbsp;&nbsp;&nbsp;&nbsp;日）</span></td>' +
+        '</tr>' +
+        '</table>' +
         '</div>';
     }
 
     function buildWordBlob() {
-      var content = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">' +
-        '<head><meta charset="utf-8"><title>觀課記錄表</title>' +
-        '<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->' +
-        '</head><body>' + buildStandardHtmlReport() + '</body></html>';
-      return new Blob(['\ufeff', content], { type: 'application/msword' });
+      var boundary = "----=_NextPart_DaguanObsDoc_" + Date.now();
+      var htmlContent = buildStandardHtmlReport(true);
+      
+      var parts = [];
+      parts.push("MIME-Version: 1.0\r\n");
+      parts.push("Content-Type: multipart/related; type=\"text/html\"; boundary=\"" + boundary + "\"\r\n\r\n");
+      
+      parts.push("--" + boundary + "\r\n");
+      parts.push("Content-Type: text/html; charset=\"utf-8\"\r\n");
+      parts.push("Content-Transfer-Encoding: 8bit\r\n\r\n");
+      parts.push('<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">\r\n<head><meta charset="utf-8"><title>觀課記錄表</title>\r\n<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->\r\n</head><body>\r\n');
+      parts.push(htmlContent);
+      parts.push('\r\n</body></html>\r\n\r\n');
+      
+      if (appState.photos && appState.photos.length > 0) {
+        for (var i = 0; i < appState.photos.length; i++) {
+          var p = appState.photos[i];
+          var rawB64 = p.base64 || '';
+          var cleanB64 = rawB64;
+          var commaIdx = cleanB64.indexOf(',');
+          if (commaIdx !== -1) {
+            cleanB64 = cleanB64.substring(commaIdx + 1);
+          }
+          var photoName = "daguan_photo_" + i + ".jpg";
+          
+          parts.push("--" + boundary + "\r\n");
+          parts.push("Content-Type: image/jpeg\r\n");
+          parts.push("Content-Transfer-Encoding: base64\r\n");
+          parts.push("Content-Location: " + photoName + "\r\n");
+          parts.push("Content-ID: <" + photoName + ">\r\n\r\n");
+          parts.push(cleanB64 + "\r\n\r\n");
+        }
+      }
+      
+      parts.push("--" + boundary + "--\r\n");
+      return new Blob(parts, { type: 'application/msword' });
     }
 
     function blobToBase64(blob) {
@@ -1313,7 +1401,7 @@
           return;
         }
         var ext = blob.type.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
-        var filename = (appState.obsDate || '觀課') + '-' + (appState.teacherName || '教師') + '-課堂現場錄音' + ext;
+        var filename = getStandardNamingBase() + '-課堂現場錄音' + ext;
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
         a.href = url;
@@ -1328,7 +1416,7 @@
       var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>觀課記錄表</title></head><body style="margin:0;padding:20px;">' + buildStandardHtmlReport() + '</body></html>';
       var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
       var url = URL.createObjectURL(blob);
-      var filename = (appState.obsDate || '觀課') + '-' + (appState.teacherName || '教師') + '-新北市立大觀國民中學數位觀課記錄表.html';
+      var filename = getStandardNamingBase() + '-數位觀課記錄表.html';
       var a = document.createElement('a');
       a.href = url;
       a.download = filename;
@@ -1339,7 +1427,7 @@
 
     function downloadWordDocument() {
       var blob = buildWordBlob();
-      var filename = (appState.obsDate || '觀課') + '-' + (appState.teacherName || '教師') + '-新北市立大觀國民中學數位觀課記錄表.doc';
+      var filename = getStandardNamingBase() + '-數位觀課記錄表.doc';
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url;
@@ -1351,28 +1439,30 @@
 
     function printObservationReport() {
       var area = document.getElementById('printArea');
-      area.innerHTML = buildStandardHtmlReport();
-      area.classList.remove('hidden');
-      window.print();
-      area.classList.add('hidden');
+      if (area) {
+        area.innerHTML = buildStandardHtmlReport();
+        area.classList.remove('hidden');
+        window.print();
+        area.classList.add('hidden');
+      }
     }
 
-    function syncToGoogleDriveAndSheets() {
+    function syncToGoogleDriveAndSheets(andThenResetCallback) {
       var btn = document.getElementById('btnSyncCloud');
       var spinner = document.getElementById('syncSpinner');
       var btnText = document.getElementById('syncBtnText');
       var resultBox = document.getElementById('cloudSyncResultBox');
       var linksContainer = document.getElementById('cloudLinksContainer');
 
-      btn.disabled = true;
-      spinner.classList.remove('hidden');
-      btnText.innerText = '正在封裝並上傳錄音、照片、PDF、Word 至雲端...';
-      resultBox.classList.add('hidden');
+      if (btn) btn.disabled = true;
+      if (spinner) spinner.classList.remove('hidden');
+      if (btnText) btnText.innerText = '正在封裝並上傳錄音、照片、PDF、Word 至雲端...';
+      if (resultBox) resultBox.classList.add('hidden');
 
       var wordBlob = buildWordBlob();
-      var pdfHtmlBlob = new Blob([buildStandardHtmlReport()], { type: 'text/html;charset=utf-8' });
+      var pdfHtmlBlob = new Blob([buildStandardHtmlReport(false)], { type: 'text/html;charset=utf-8' });
 
-      getReadyAudioBlob().then(function(audioBlob) {
+      return getReadyAudioBlob().then(function(audioBlob) {
         return Promise.all([
           blobToBase64(wordBlob),
           blobToBase64(pdfHtmlBlob),
@@ -1383,7 +1473,7 @@
           var audioBase64 = results[2];
           var audioMime = (audioBlob && audioBlob.type) ? audioBlob.type : "audio/webm";
 
-          var subfolderName = (appState.obsDate || '觀課') + "-" + (appState.teacherName || '教師');
+          var subfolderName = getStandardNamingBase();
 
           var payload = {
             folderName: subfolderName,
@@ -1420,10 +1510,11 @@
         return resp.json();
       }).then(function(res) {
         if (res.status === 'success') {
+          appState.hasSyncedCloud = true; // 標記已同步完成
           showToast("🎉 觀課記錄、音檔與照片已同步至 Google 雲端！", "success");
-          resultBox.classList.remove('hidden');
+          if (resultBox) resultBox.classList.remove('hidden');
 
-          var subfolderName = (appState.obsDate || '觀課') + "-" + (appState.teacherName || '教師');
+          var subfolderName = getStandardNamingBase();
           var linksHtml = '<div>📁 <b>專屬子資料夾：</b><a href="' + res.folderUrl + '" target="_blank" class="text-cyan-700 underline font-bold">點此開啟 ' + subfolderName + '</a></div>' +
             '<div>📊 <b>觀課總表試算表：</b><a href="' + res.spreadsheetUrl + '" target="_blank" class="text-emerald-700 underline font-bold">點此開啟「數位觀課總表」</a></div>';
 
@@ -1440,7 +1531,11 @@
             linksHtml += '<div class="text-amber-800 font-semibold">📸 <b>課堂現場照片：</b>已成功同步 ' + res.photoCount + ' 張佐證照片至子資料夾！</div>';
           }
 
-          linksContainer.innerHTML = linksHtml;
+          if (linksContainer) linksContainer.innerHTML = linksHtml;
+
+          if (typeof andThenResetCallback === 'function') {
+            setTimeout(andThenResetCallback, 1500);
+          }
         } else {
           throw new Error(res.message || '後端回傳錯誤');
         }
@@ -1448,9 +1543,9 @@
         console.error("雲端同步失敗:", err);
         showToast("同步失敗：" + err.message, "error");
       }).finally(function() {
-        btn.disabled = false;
-        spinner.classList.add('hidden');
-        btnText.innerText = '☁️ 一鍵同步歸檔至 Google 雲端硬碟';
+        if (btn) btn.disabled = false;
+        if (spinner) spinner.classList.add('hidden');
+        if (btnText) btnText.innerText = '☁️ 一鍵同步歸檔至 Google 雲端硬碟';
       });
     }
 
@@ -1507,6 +1602,20 @@
         return;
       }
 
+      // 防呆檢查：若在步驟 4 且有觀課資料但尚未同步雲端，彈窗提醒
+      var hasData = appState.records.length > 0 || appState.photos.length > 0 || appState.audioBlob !== null || (appState.elapsedSeconds > 10);
+      if (appState.currentStep === 4 && hasData && !appState.hasSyncedCloud) {
+        var unsyncedModal = document.getElementById('unsyncedConfirmModal');
+        if (unsyncedModal) {
+          unsyncedModal.classList.remove('hidden');
+          return;
+        }
+      }
+
+      executeResetToNewObservation();
+    }
+
+    function executeResetToNewObservation() {
       var keepObserver = appState.observerName;
       appState.obsDate = '';
       appState.teacherName = '';
@@ -1524,6 +1633,7 @@
       appState.recordedChunks = [];
       appState.audioBlob = null;
       appState.audioDurationSeconds = 0;
+      appState.hasSyncedCloud = false;
       appState.aiStrengths = '';
       appState.aiGrowth = '';
       appState.aiSuggestions = '';
@@ -1543,6 +1653,9 @@
 
       var resultBox = document.getElementById('cloudSyncResultBox');
       if (resultBox) resultBox.classList.add('hidden');
+
+      var unsyncedModal = document.getElementById('unsyncedConfirmModal');
+      if (unsyncedModal) unsyncedModal.classList.add('hidden');
 
       renderPhotosPreviewStrip();
       initDefaultDate();
@@ -1622,13 +1735,33 @@
       if (printBtn) printBtn.addEventListener('click', printObservationReport);
 
       var syncBtn = document.getElementById('btnSyncCloud');
-      if (syncBtn) syncBtn.addEventListener('click', syncToGoogleDriveAndSheets);
+      if (syncBtn) syncBtn.addEventListener('click', function() { syncToGoogleDriveAndSheets(); });
 
       var newObsTop = document.getElementById('btnNewObsTop');
       if (newObsTop) newObsTop.addEventListener('click', promptStartNewObservation);
 
       var newObsBottom = document.getElementById('btnNewObsBottom');
       if (newObsBottom) newObsBottom.addEventListener('click', promptStartNewObservation);
+
+      // 防呆彈窗按鈕監聽
+      var modalSyncBtn = document.getElementById('btnModalSyncAndNew');
+      if (modalSyncBtn) {
+        modalSyncBtn.addEventListener('click', function() {
+          var modal = document.getElementById('unsyncedConfirmModal');
+          if (modal) modal.classList.add('hidden');
+          showToast("開始為您自動同步歸檔本次觀課資料...", "info");
+          syncToGoogleDriveAndSheets(function() {
+            executeResetToNewObservation();
+          });
+        });
+      }
+
+      var modalDiscardBtn = document.getElementById('btnModalDiscardAndNew');
+      if (modalDiscardBtn) {
+        modalDiscardBtn.addEventListener('click', function() {
+          executeResetToNewObservation();
+        });
+      }
 
       var gasModalBtn = document.getElementById('btnGasSettingsModal');
       if (gasModalBtn) gasModalBtn.addEventListener('click', openGasSettingsModal);
