@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>新北市立大觀國民中學 數位觀課與課堂智慧紀錄分析系統</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
+    body {
+      font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 3px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #printArea, #printArea * {
+        visibility: visible;
+      }
+      #printArea {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased">
+
+  <!-- 緊急錄音救援橫幅 -->
+  <div id="rescueAudioBanner" class="hidden bg-emerald-700 text-white px-4 py-3 text-xs sm:text-sm font-bold shadow-md flex items-center justify-between z-50 sticky top-0">
+    <div class="flex items-center space-x-2">
+      <span class="text-lg">💾</span>
+      <span>偵測到本機存有未遺失的課堂錄音快取！</span>
+    </div>
+    <div class="flex items-center space-x-2">
+      <button id="btnDownloadRescuedAudio" class="px-3 py-1 bg-white text-emerald-800 hover:bg-emerald-50 rounded-lg text-xs font-bold shadow transition">
+        ⬇️ 立即下載救回錄音檔
+      </button>
+      <button id="btnCloseRescueBanner" class="text-white hover:text-emerald-200 ml-1 text-base">✕</button>
+    </div>
+  </div>
+
+  <!-- LINE / 內建瀏覽器警示橫幅 -->
+  <div id="inAppBrowserAlert" class="hidden bg-amber-500 text-slate-900 px-4 py-2.5 text-xs sm:text-sm font-bold shadow-md flex items-center justify-between z-50 sticky top-0">
+    <div class="flex items-center space-x-2">
+      <span class="text-base">⚠️</span>
+      <span>您正在 LINE 或社交 App 內開啟網頁，麥克風可能受限！請點右下角「<b>📤</b>」或「<b>...</b>」選擇「<b>在 Safari/Chrome 開啟</b>」以順暢錄音。</span>
+    </div>
+    <button id="btnCloseInAppAlert" class="text-slate-900 font-bold ml-2 text-base">✕</button>
+  </div>
+
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-cyan-700 flex items-center justify-center text-white font-bold text-xl shadow-md">
+          觀
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">新北市立大觀國民中學</h1>
+          <p class="text-xs text-slate-500 flex items-center space-x-1.5">
+            <span>數位觀課與課堂智慧紀錄分析系統</span>
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+              改版：2026/09/24 07:15
+            </span>
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2">
+        <button id="btnManualRescue" class="inline-flex items-center px-3 py-1.5 border border-amber-400 text-xs sm:text-sm font-bold rounded-lg text-amber-800 bg-amber-50 hover:bg-amber-100 shadow-sm transition">
+          <span class="mr-1">🛟</span> 掃描救援快取音檔
+        </button>
+        <button id="btnNewObsTop" class="inline-flex items-center px-3 py-1.5 border border-slate-300 text-xs sm:text-sm font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 shadow-sm transition">
+          <span class="mr-1">➕</span> 進行下一次觀課
+        </button>
+        <button id="btnGasSettingsModal" class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-600 bg-slate-100 hover:bg-slate-200 transition">
+          <span class="mr-1 text-emerald-600">●</span> 雲端硬碟已連線
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="bg-white border-b border-slate-200 py-3 shadow-sm">
+    <div class="max-w-5xl mx-auto px-4">
+      <div class="grid grid-cols-4 gap-2 text-center text-xs sm:text-sm font-semibold">
+        <div id="stepTab1" class="py-2 rounded-lg bg-cyan-700 text-white font-bold shadow-sm transition cursor-pointer">1. 基本資料設定</div>
+        <div id="stepTab2" class="py-2 rounded-lg text-slate-400 bg-slate-50 transition cursor-pointer">2. 觀課與同步錄音</div>
+        <div id="stepTab3" class="py-2 rounded-lg text-slate-400 bg-slate-50 transition cursor-pointer">3. AI分析與編輯預覽</div>
+        <div id="stepTab4" class="py-2 rounded-lg text-slate-400 bg-slate-50 transition cursor-pointer">4. 匯出與雲端歸檔</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主內容容器 -->
+  <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6">
+
+    <section id="step1Section" class="space-y-6">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-slate-100 gap-2">
+          <div>
+            <h2 class="text-lg font-bold text-slate-900">觀課基本資訊填寫</h2>
+            <p class="text-xs text-slate-500">填寫公開觀課之授課與觀課教師相關資訊，將自動於 Google 雲端建立專屬資料夾並產出校本記錄表。</p>
+          </div>
+          <button id="btnFillMockData" type="button" class="text-xs text-cyan-700 hover:text-cyan-900 font-bold bg-cyan-50 hover:bg-cyan-100 px-3.5 py-2 rounded-lg border border-cyan-300 shadow-sm transition">
+            ⚡ 快速填入示範測試資料
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">授課日期 (民國或西元)</label>
+            <input type="text" id="obsDate" placeholder="例如：1150917 或 2026/09/17" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">授課教師 (被觀課)</label>
+            <input type="text" id="teacherName" placeholder="例如：黃雲清老師" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">觀課教師 (記錄者)</label>
+            <input type="text" id="observerName" placeholder="例如：李小美老師" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">授課科目</label>
+            <input type="text" id="subjectName" placeholder="例如：國文、數學、理化" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">授課單元</label>
+            <input type="text" id="unitName" placeholder="例如：2-1 物質的變化" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">授課班級</label>
+            <input type="text" id="className" placeholder="例如：8年2班" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div class="mt-6 pt-4 border-t border-slate-100 flex justify-end">
+          <button id="btnStartObs" type="button" class="w-full sm:w-auto px-6 py-2.5 bg-cyan-700 hover:bg-cyan-800 text-white font-semibold rounded-xl shadow-md transition flex items-center justify-center space-x-2">
+            <span>確認資訊並開始觀課</span>
+            <span>➔</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section id="step2Section" class="hidden space-y-6">
+      <!-- 錄音未啟動之緊急警示提示 -->
+      <div id="recordingNoticeBar" class="hidden bg-amber-500 text-slate-900 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow flex items-center justify-between animate-pulse">
+        <div class="flex items-center space-x-2">
+          <span>⚠️</span>
+          <span><b>提醒：麥克風尚未啟動！</b> 本次觀課目前尚未錄音，請點擊右方按鈕開啟收音。</span>
+        </div>
+        <button id="btnNoticeStartRecord" type="button" class="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-semibold shadow">
+          🎙️ 立即開啟錄音
+        </button>
+      </div>
+
+      <div class="bg-cyan-900 text-white rounded-2xl p-4 sm:p-6 shadow-lg">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center space-x-2 text-cyan-200 text-xs font-semibold">
+              <span id="badgeClass" class="bg-cyan-800 px-2 py-0.5 rounded">8年2班</span>
+              <span id="badgeSubject" class="bg-cyan-800 px-2 py-0.5 rounded">理化</span>
+              <span id="badgeTeacher">授課：黃雲清老師</span>
+            </div>
+            <h3 id="badgeUnit" class="text-base sm:text-lg font-bold mt-1">2-1 物質的變化</h3>
+          </div>
+          <div class="flex items-center space-x-4">
+            <div class="text-right">
+              <div class="text-xs text-cyan-200">觀課累計時間</div>
+              <div id="observationTimerDisplay" class="text-2xl sm:text-3xl font-mono font-bold tracking-wider">00:00</div>
+            </div>
+            <button id="audioRecordBtn" type="button" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow transition flex items-center space-x-2">
+              <span id="recordingIndicatorDot" class="w-2.5 h-2.5 bg-white rounded-full animate-ping hidden"></span>
+              <span id="recordingBtnText">啟動課堂錄音</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center justify-between">
+          <span>第二部分：隨打即存質性紀錄 (自動標註時間戳)</span>
+          <span class="text-xs font-normal text-slate-500">按 Enter 鍵快速送出</span>
+        </h3>
+
+        <div class="flex flex-wrap gap-1.5 mb-3">
+          <span class="text-xs text-slate-400 self-center mr-1">指標快捷標籤：</span>
+          <button type="button" class="quick-tag-btn px-2.5 py-1 bg-slate-100 hover:bg-cyan-50 text-slate-700 hover:text-cyan-700 rounded-lg text-xs transition border border-slate-200" data-tag="[提問引導] ">提問引導</button>
+          <button type="button" class="quick-tag-btn px-2.5 py-1 bg-slate-100 hover:bg-cyan-50 text-slate-700 hover:text-cyan-700 rounded-lg text-xs transition border border-slate-200" data-tag="[師生互動] ">師生互動</button>
+          <button type="button" class="quick-tag-btn px-2.5 py-1 bg-slate-100 hover:bg-cyan-50 text-slate-700 hover:text-cyan-700 rounded-lg text-xs transition border border-slate-200" data-tag="[小組討論] ">小組討論</button>
+          <button type="button" class="quick-tag-btn px-2.5 py-1 bg-slate-100 hover:bg-cyan-50 text-slate-700 hover:text-cyan-700 rounded-lg text-xs transition border border-slate-200" data-tag="[個人思考] ">個人思考</button>
+          <button type="button" class="quick-tag-btn px-2.5 py-1 bg-slate-100 hover:bg-cyan-50 text-slate-700 hover:text-cyan-700 rounded-lg text-xs transition border border-slate-200" data-tag="[簡報教學] ">簡報教學</button>
+          <button type="button" class="quick-tag-btn px-2.5 py-1 bg-slate-100 hover:bg-cyan-50 text-slate-700 hover:text-cyan-700 rounded-lg text-xs transition border border-slate-200" data-tag="[板書說明] ">板書說明</button>
+          <button type="button" class="quick-tag-btn px-2.5 py-1 bg-slate-100 hover:bg-cyan-50 text-slate-700 hover:text-cyan-700 rounded-lg text-xs transition border border-slate-200" data-tag="[學生發言] ">學生發言</button>
+          <button type="button" class="quick-tag-btn px-2.5 py-1 bg-slate-100 hover:bg-cyan-50 text-slate-700 hover:text-cyan-700 rounded-lg text-xs transition border border-slate-200" data-tag="[常規管理] ">常規管理</button>
+        </div>
+
+        <div class="flex space-x-2">
+          <input type="text" id="recordInput" placeholder="在此輸入觀察到的具體教學行為或師生互動..." class="flex-1 px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+          <button id="btnAddRecord" type="button" class="px-5 py-2.5 bg-cyan-700 hover:bg-cyan-800 text-white font-medium rounded-xl text-sm shadow transition">
+            送出
+          </button>
+        </div>
+
+        <div id="recordsListContainer" class="mt-4 border border-slate-100 rounded-xl max-h-72 overflow-y-auto custom-scrollbar divide-y divide-slate-100 bg-slate-50/50">
+          <div id="recordsEmptyNotice" class="p-6 text-center text-xs text-slate-400">
+            尚未新增質性紀錄。觀課進行中，隨時輸入文字按 Enter 即可記錄課堂時點！
+          </div>
+        </div>
+
+        <div class="mt-6 pt-4 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-3">
+          <span class="text-xs text-slate-500">已自動儲存至本機防斷線暫存</span>
+          <button id="btnFinishObs" type="button" class="w-full sm:w-auto px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl shadow transition flex items-center justify-center space-x-2">
+            <span>結束觀課並進入 AI 分析</span>
+            <span>➔</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section id="step3Section" class="hidden space-y-6">
+      <div id="aiScopeDashboard" class="bg-slate-900 text-white rounded-2xl p-5 shadow-sm border border-slate-800">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div class="flex items-center space-x-2">
+            <span class="text-cyan-400 font-bold">🤖 Gemini 課堂分析範圍與證據可信度判定</span>
+          </div>
+          <span id="aiScopeBadge" class="text-xs px-2.5 py-1 rounded-full bg-cyan-900 text-cyan-300 font-bold">
+            偵測中...
+          </span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-xs">
+          <div>
+            <div class="text-slate-400">實際錄音時長</div>
+            <div id="scopeAudioDurationText" class="font-semibold text-slate-200 mt-0.5">--:--</div>
+          </div>
+          <div>
+            <div class="text-slate-400">分析範疇標籤</div>
+            <div id="scopeLabelText" class="font-semibold text-slate-200 mt-0.5">--</div>
+          </div>
+          <div>
+            <div class="text-slate-400">證據可信度</div>
+            <div id="scopeConfidenceText" class="font-semibold text-slate-200 mt-0.5">--</div>
+          </div>
+          <div>
+            <div class="text-slate-400">語音清晰度</div>
+            <div id="scopeClarityText" class="font-semibold text-slate-200 mt-0.5">--</div>
+          </div>
+        </div>
+        <div id="scopeLimitationsBox" class="mt-3 text-xs text-amber-300 bg-amber-950/40 p-2.5 rounded-lg border border-amber-800/40 hidden">
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-5">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-3 border-b border-slate-100 gap-2">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">第三部分：課堂教學綜合分析與預覽編輯</h3>
+            <p class="text-xs text-slate-500">以下內容依據教育部與新北市公開授課規準客觀分析，您可以直接在下方編輯框修改與增補。</p>
+          </div>
+          <button id="btnReAnalyze" type="button" class="text-xs text-cyan-600 hover:text-cyan-800 bg-cyan-50 px-3 py-1.5 rounded-lg border border-cyan-200 font-medium">
+            🔄 重新進行 AI 分析
+          </button>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-emerald-800 mb-1 flex items-center space-x-1">
+            <span>一、課堂教學優點與亮點 (Strengths)</span>
+          </label>
+          <textarea id="editAiStrengths" rows="4" class="w-full p-3 text-xs sm:text-sm border border-emerald-200 rounded-xl bg-emerald-50/30 focus:ring-2 focus:ring-emerald-500 focus:outline-none"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-amber-800 mb-1 flex items-center space-x-1">
+            <span>二、課堂待改進之處 (Weaknesses)</span>
+          </label>
+          <textarea id="editAiGrowth" rows="4" class="w-full p-3 text-xs sm:text-sm border border-amber-200 rounded-xl bg-amber-50/30 focus:ring-2 focus:ring-amber-500 focus:outline-none"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-blue-800 mb-1 flex items-center space-x-1">
+            <span>三、行動精進建議 (Recommendations)</span>
+          </label>
+          <textarea id="editAiSuggestions" rows="4" class="w-full p-3 text-xs sm:text-sm border border-blue-200 rounded-xl bg-blue-50/30 focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+        </div>
+
+        <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600">
+          <b>備註：</b>「第四部分 議課後心得與想法」將於產出之 Word/PDF 文件中保留充足空白欄位，供被觀課教師於會後手寫或打字填寫。
+        </div>
+
+        <div class="pt-4 border-t border-slate-100 flex justify-end space-x-3">
+          <button id="btnBackToStep2" type="button" class="px-4 py-2 border border-slate-300 rounded-xl text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 transition">
+            返回紀錄
+          </button>
+          <button id="btnProceedToStep4" type="button" class="px-6 py-2.5 bg-cyan-700 hover:bg-cyan-800 text-white font-semibold rounded-xl text-xs sm:text-sm shadow transition">
+            確認無誤，進入匯出與歸檔 ➔
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section id="step4Section" class="hidden space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
+          <div>
+            <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl mb-3 font-bold">
+              📄
+            </div>
+            <h3 class="text-base font-bold text-slate-900">匯出校本標準觀課紀錄表與音檔</h3>
+            <p class="text-xs text-slate-500 mt-1">內含學校標準抬頭、基本資料表格、時間質性紀錄、AI雙軌分析、議課心得空白框與雙師簽名欄。</p>
+
+            <div class="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600">
+              預計檔名：<span id="exportDocName" class="font-mono text-cyan-800 font-semibold">1150917-黃雲清老師-新北市立大觀國民中學數位觀課記錄表</span>
+            </div>
+          </div>
+
+          <div class="space-y-2 pt-2">
+            <button id="btnDownloadAudioLocal" type="button" class="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow transition flex items-center justify-center space-x-2">
+              <span>🎙️ 下載課堂錄音檔 (本機備份)</span>
+            </button>
+            <button id="btnDownloadPdf" type="button" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow transition flex items-center justify-center space-x-2">
+              <span>📄 下載標準 PDF 紀錄表 (手機最佳)</span>
+            </button>
+            <button id="btnDownloadWord" type="button" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-xs sm:text-sm shadow transition flex items-center justify-center space-x-2">
+              <span>📝 下載 Word 紀錄表 (.doc/.docx)</span>
+            </button>
+            <button id="btnPrintReport" type="button" class="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl text-xs transition">
+              🖨️ 手機整頁列印／另存為 PDF
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
+          <div>
+            <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl mb-3 font-bold">
+              ☁️
+            </div>
+            <h3 class="text-base font-bold text-slate-900">全自動雲端硬碟歸檔與試算表記錄</h3>
+            <p class="text-xs text-slate-500 mt-1">
+              自動在母資料夾「數位觀課紀錄資料庫」建立專屬子資料夾，同時上傳<b>課堂錄音檔</b>、<b>Word 檔</b>、<b>PDF 檔</b>，並將完整觀課紀錄登錄至<b>觀課總表試算表</b>。
+            </p>
+
+            <div class="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
+              <div class="text-slate-600">指定母資料夾：<code class="text-cyan-800 font-mono">1xLAmgsKMO32lweFjC39RCVBsfaM0xoQr</code></div>
+              <div class="text-slate-600">專屬子資料夾：<b id="cloudSubfolderName" class="text-slate-800">1150917-黃雲清老師</b></div>
+              <div id="audioStatusText" class="font-medium text-slate-700">錄音檔狀態：檢查中...</div>
+              <audio id="audioPreviewPlayer" controls class="w-full mt-2 hidden"></audio>
+  <!-- 麥克風解鎖引導彈窗 (當被瀏覽器封鎖時自動跳出) -->
+  <div id="micPermissionModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 text-slate-800">
+      <div class="flex items-center space-x-3 text-rose-600">
+        <span class="text-2xl">🎙️❌</span>
+        <h3 class="text-base font-bold text-slate-900">瀏覽器麥克風權限已被封鎖</h3>
+      </div>
+      <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+        您的 Chrome / Safari 瀏覽器目前<b>禁止了此網頁使用麥克風</b>。請依照以下步驟解除封鎖：
+      </p>
+      
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs space-y-2.5">
+        <div class="flex items-start space-x-2">
+          <span class="w-5 h-5 rounded-full bg-cyan-700 text-white flex items-center justify-center text-[11px] shrink-0 font-bold">1</span>
+          <span>點擊瀏覽器最上方網址列左側的<b>「網站設定圖示 (🎚️ 兩條橫線開關)」</b>或鎖頭圖示。</span>
+        </div>
+        <div class="flex items-start space-x-2">
+          <span class="w-5 h-5 rounded-full bg-cyan-700 text-white flex items-center justify-center text-[11px] shrink-0 font-bold">2</span>
+          <span>找到<b>「麥克風」</b>項目，將其開關切換為<b>「開啟」</b>或<b>「允許」</b>。</span>
+        </div>
+        <div class="flex items-start space-x-2">
+          <span class="w-5 h-5 rounded-full bg-cyan-700 text-white flex items-center justify-center text-[11px] shrink-0 font-bold">3</span>
+          <span>關閉選單，點擊瀏覽器的<b>「重新載入 (F5)」</b>即可正常錄音！</span>
+        </div>
+      </div>
+
+      <div class="pt-2 flex justify-end">
+        <button id="btnCloseMicModal" type="button" class="px-5 py-2 bg-cyan-700 hover:bg-cyan-800 text-white text-xs sm:text-sm font-semibold rounded-xl shadow transition">
+          我知道了，前往開啟
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="printArea" class="hidden"></div>
+
+  <div id="gasSettingsModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <h3 class="text-base font-bold text-slate-900">Google Apps Script (GAS) 雲端連線資訊</h3>
+        <button id="btnCloseGasModalX" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed">
+        本系統已內建預設 Google Apps Script Web App 連線網址，所有觀課記錄將自動歸檔至大觀國中指定的 Google 雲端硬碟母資料夾。
+      </p>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">GAS 部署網址 (URL)</label>
+        <input type="text" id="settingGasUrl" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono text-slate-700 bg-slate-50" readonly>
+      </div>
+      <div class="flex justify-end space-x-2 pt-2">
+        <button id="btnCloseGasModalBtn" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <script>
+    var DEFAULT_GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwurqtKWFZu9F9tbypW3qfXxne9gZXQ7CsVAur3IzX3fzvMmKV2PtwLK7nHe27wYlvk/exec";
+
+    var appState = {
+      gasUrl: DEFAULT_GAS_WEB_APP_URL,
+      currentStep: 1,
+      obsDate: '',
+      teacherName: '',
+      observerName: '',
+      subjectName: '',
+      unitName: '',
+      className: '',
+      isObserving: false,
+      elapsedSeconds: 0,
+      timerInterval: null,
+      records: [],
+      isRecording: false,
+      mediaRecorder: null,
+      audioStream: null,
+      recordedChunks: [],
+      audioBlob: null,
+      audioDurationSeconds: 0,
+      durationSource: 'none',
+      analysisScope: 'VERY_SHORT_CLIP',
+      scopeLabel: '極短片段／測試錄音',
+      aiConfidence: 'LOW',
+      speechClarity: '一般',
+      limitations: [],
+      aiStrengths: '',
+      aiGrowth: '',
+      aiSuggestions: '',
+      idb: null
+    };
+
+    function initIndexedDB() {
+      return new Promise(function(resolve) {
+        try {
+          var req = indexedDB.open('DaguanObsDB', 1);
+          req.onupgradeneeded = function(e) {
+            var db = e.target.result;
+            if (!db.objectStoreNames.contains('audioChunks')) {
+              db.createObjectStore('audioChunks', { autoIncrement: true });
+            }
+          };
+          req.onsuccess = function(e) {
+            appState.idb = e.target.result;
+            resolve(true);
+          };
+          req.onerror = function() { resolve(false); };
+        } catch (err) {
+          resolve(false);
+        }
+      });
+    }
+
+    function saveAudioChunkToIDB(chunk) {
+      if (!appState.idb) return;
+      try {
+        var tx = appState.idb.transaction('audioChunks', 'readwrite');
+        tx.objectStore('audioChunks').add(chunk);
+      } catch (e) {
+        console.error("IDB chunk save error:", e);
+      }
+    }
+
+    function clearAudioChunksFromIDB() {
+      if (!appState.idb) return;
+      try {
+        var tx = appState.idb.transaction('audioChunks', 'readwrite');
+        tx.objectStore('audioChunks').clear();
+      } catch (e) {}
+    }
+
+    function getCachedAudioChunksFromIDB() {
+      if (!appState.idb) return Promise.resolve([]);
+      return new Promise(function(resolve) {
+        try {
+          var tx = appState.idb.transaction('audioChunks', 'readonly');
+          var req = tx.objectStore('audioChunks').getAll();
+          req.onsuccess = function() { resolve(req.result || []); };
+          req.onerror = function() { resolve([]); };
+        } catch (e) {
+          resolve([]);
+        }
+      });
+    }
+
+    function autoSaveStateToLocalStorage() {
+      try {
+        var backup = {
+          obsDate: document.getElementById('obsDate') ? document.getElementById('obsDate').value : appState.obsDate,
+          teacherName: document.getElementById('teacherName') ? document.getElementById('teacherName').value : appState.teacherName,
+          observerName: document.getElementById('observerName') ? document.getElementById('observerName').value : appState.observerName,
+          subjectName: document.getElementById('subjectName') ? document.getElementById('subjectName').value : appState.subjectName,
+          unitName: document.getElementById('unitName') ? document.getElementById('unitName').value : appState.unitName,
+          className: document.getElementById('className') ? document.getElementById('className').value : appState.className,
+          elapsedSeconds: appState.elapsedSeconds,
+          records: appState.records,
+          currentStep: appState.currentStep,
+          aiStrengths: appState.aiStrengths,
+          aiGrowth: appState.aiGrowth,
+          aiSuggestions: appState.aiSuggestions
+        };
+        localStorage.setItem('daguan_obs_autosave', JSON.stringify(backup));
+      } catch (e) {}
+    }
+
+    function tryRestoreStateFromLocalStorage() {
+      try {
+        var raw = localStorage.getItem('daguan_obs_autosave');
+        if (!raw) return false;
+        var data = JSON.parse(raw);
+        if (data.records && data.records.length > 0) {
+          appState.obsDate = data.obsDate || '';
+          appState.teacherName = data.teacherName || '';
+          appState.observerName = data.observerName || '';
+          appState.subjectName = data.subjectName || '';
+          appState.unitName = data.unitName || '';
+          appState.className = data.className || '';
+          appState.elapsedSeconds = data.elapsedSeconds || 0;
+          appState.records = data.records || [];
+          appState.aiStrengths = data.aiStrengths || '';
+          appState.aiGrowth = data.aiGrowth || '';
+          appState.aiSuggestions = data.aiSuggestions || '';
+
+          if (document.getElementById('obsDate')) document.getElementById('obsDate').value = appState.obsDate;
+          if (document.getElementById('teacherName')) document.getElementById('teacherName').value = appState.teacherName;
+          if (document.getElementById('observerName')) document.getElementById('observerName').value = appState.observerName;
+          if (document.getElementById('subjectName')) document.getElementById('subjectName').value = appState.subjectName;
+          if (document.getElementById('unitName')) document.getElementById('unitName').value = appState.unitName;
+          if (document.getElementById('className')) document.getElementById('className').value = appState.className;
+          renderRecordsList();
+          return true;
+        }
+      } catch (e) {}
+      return false;
+    }
+
+    function goToStep(step) {
+      appState.currentStep = step;
+      document.getElementById('step1Section').classList.add('hidden');
+      document.getElementById('step2Section').classList.add('hidden');
+      document.getElementById('step3Section').classList.add('hidden');
+      document.getElementById('step4Section').classList.add('hidden');
+
+      [1, 2, 3, 4].forEach(function(i) {
+        var tab = document.getElementById('stepTab' + i);
+        if (!tab) return;
+        if (i === step) {
+          tab.className = "py-2 rounded-lg bg-cyan-700 text-white font-bold shadow-sm transition cursor-pointer";
+        } else if (i < step) {
+          tab.className = "py-2 rounded-lg bg-cyan-50 text-cyan-700 border border-cyan-200 transition cursor-pointer";
+        } else {
+          tab.className = "py-2 rounded-lg text-slate-400 bg-slate-50 transition cursor-pointer";
+        }
+      });
+
+      if (step === 1) document.getElementById('step1Section').classList.remove('hidden');
+      if (step === 2) document.getElementById('step2Section').classList.remove('hidden');
+      if (step === 3) document.getElementById('step3Section').classList.remove('hidden');
+      if (step === 4) document.getElementById('step4Section').classList.remove('hidden');
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function initDefaultDate() {
+      var today = new Date();
+      var rocYear = today.getFullYear() - 1911;
+      var m = String(today.getMonth() + 1).padStart(2, '0');
+      var d = String(today.getDate()).padStart(2, '0');
+      var input = document.getElementById('obsDate');
+      if (input && !input.value) {
+        input.value = "" + rocYear + m + d;
+      }
+    }
+
+    function fillMockTestData() {
+      var today = new Date();
+      var rocYear = today.getFullYear() - 1911;
+      var m = String(today.getMonth() + 1).padStart(2, '0');
+      var d = String(today.getDate()).padStart(2, '0');
+      document.getElementById('obsDate').value = "" + rocYear + m + d;
+      document.getElementById('teacherName').value = '黃雲清老師';
+      document.getElementById('observerName').value = '李小美老師';
+      document.getElementById('subjectName').value = '理化';
+      document.getElementById('unitName').value = '2-1 物質的變化';
+      document.getElementById('className').value = '8年2班';
+      showToast("已帶入大觀國中示範測試資料！", "info");
+    }
+
+    function startObservationFlow() {
+      appState.obsDate = document.getElementById('obsDate').value.trim();
+      appState.teacherName = document.getElementById('teacherName').value.trim();
+      appState.observerName = document.getElementById('observerName').value.trim();
+      appState.subjectName = document.getElementById('subjectName').value.trim();
+      appState.unitName = document.getElementById('unitName').value.trim();
+      appState.className = document.getElementById('className').value.trim();
+
+      if (!appState.teacherName || !appState.subjectName || !appState.unitName) {
+        showToast("請至少填寫授課教師、科目與授課單元！", "warning");
+        return;
+      }
+
+      document.getElementById('badgeClass').innerText = appState.className || '未設定班級';
+      document.getElementById('badgeSubject').innerText = appState.subjectName || '未設定科目';
+      document.getElementById('badgeTeacher').innerText = "授課：" + appState.teacherName;
+      document.getElementById('badgeUnit').innerText = appState.unitName;
+
+      if (!appState.isObserving) {
+        appState.isObserving = true;
+        if (!appState.timerInterval) {
+          appState.timerInterval = setInterval(function() {
+            appState.elapsedSeconds++;
+            var mins = String(Math.floor(appState.elapsedSeconds / 60)).padStart(2, '0');
+            var secs = String(appState.elapsedSeconds % 60).padStart(2, '0');
+            document.getElementById('observationTimerDisplay').innerText = mins + ":" + secs;
+          }, 1000);
+        }
+      }
+
+      goToStep(2);
+
+      // 自動連動啟動錄音，免除老師忘記按錄音鍵
+      if (!appState.isRecording) {
+        startAudioRecording();
+      }
+      showToast("進入觀課模式，計時與錄音已同步啟動！", "success");
+    }
+
+    function formatCurrentTimestamp() {
+      var mins = String(Math.floor(appState.elapsedSeconds / 60)).padStart(2, '0');
+      var secs = String(appState.elapsedSeconds % 60).padStart(2, '0');
+      return mins + ":" + secs;
+    }
+
+    function insertTag(tagText) {
+      var input = document.getElementById('recordInput');
+      input.value = tagText + input.value;
+      input.focus();
+    }
+
+    function addCurrentRecord() {
+      var input = document.getElementById('recordInput');
+      var text = input.value.trim();
+      if (!text) return;
+
+      var recordItem = {
+        id: Date.now(),
+        timestamp: formatCurrentTimestamp(),
+        text: text
+      };
+
+      appState.records.push(recordItem);
+      input.value = '';
+      renderRecordsList();
+      autoSaveStateToLocalStorage();
+    }
+
+    function deleteRecord(id) {
+      appState.records = appState.records.filter(function(r) { return r.id !== id; });
+      renderRecordsList();
+      autoSaveStateToLocalStorage();
+    }
+
+    function renderRecordsList() {
+      var container = document.getElementById('recordsListContainer');
+      if (appState.records.length === 0) {
+        container.innerHTML = '<div id="recordsEmptyNotice" class="p-6 text-center text-xs text-slate-400">尚未新增質性紀錄。觀課進行中，隨時輸入文字按 Enter 即可記錄課堂時點！</div>';
+        return;
+      }
+
+      container.innerHTML = appState.records.map(function(r) {
+        return '<div class="px-4 py-2.5 flex items-start justify-between text-xs hover:bg-white transition group">' +
+          '<div class="flex items-start space-x-2 flex-1">' +
+          '<span class="font-mono font-bold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded border border-cyan-200 shrink-0">[' + r.timestamp + ']</span>' +
+          '<span class="text-slate-800 leading-relaxed break-all">' + escapeHtml(r.text) + '</span>' +
+          '</div>' +
+          '<button onclick="window.deleteRecord(' + r.id + ')" class="text-slate-300 hover:text-rose-500 font-bold ml-2 transition">✕</button>' +
+          '</div>';
+      }).join('');
+
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function escapeHtml(string) {
+      return String(string).replace(/[&<>"']/g, function(s) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[s];
+      });
+    }
+
+    function toggleAudioRecording() {
+      if (appState.isRecording) {
+        stopAudioRecording();
+      } else {
+        startAudioRecording();
+      }
+    }
+
+    function startAudioRecording() {
+      // 採用全球通用相容參數，杜絕 OverconstrainedError
+      var audioConstraints = {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      };
+
+      function proceedWithStream(stream) {
+        appState.audioStream = stream;
+        appState.recordedChunks = [];
+        clearAudioChunksFromIDB();
+
+        var mimeType = '';
+        if (typeof MediaRecorder.isTypeSupported === 'function') {
+          if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+            mimeType = 'audio/webm;codecs=opus';
+          } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+            mimeType = 'audio/mp4';
+          } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+            mimeType = 'audio/webm';
+          }
+        }
+
+        var mediaRecorder;
+        try {
+          var options = {};
+          if (mimeType) options.mimeType = mimeType;
+          options.audioBitsPerSecond = 32000;
+          mediaRecorder = new MediaRecorder(stream, options);
+        } catch (e1) {
+          try {
+            mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType: mimeType }) : new MediaRecorder(stream);
+          } catch (e2) {
+            mediaRecorder = new MediaRecorder(stream);
+          }
+        }
+
+        appState.mediaRecorder = mediaRecorder;
+
+        mediaRecorder.ondataavailable = function(e) {
+          if (e.data && e.data.size > 0) {
+            appState.recordedChunks.push(e.data);
+            saveAudioChunkToIDB(e.data);
+          }
+        };
+
+        mediaRecorder.start(1000);
+        appState.isRecording = true;
+
+        var noticeBar = document.getElementById('recordingNoticeBar');
+        if (noticeBar) noticeBar.classList.add('hidden');
+
+        document.getElementById('recordingBtnText').innerText = '🔴 課堂錄音中 (點擊暫停)';
+        document.getElementById('audioRecordBtn').classList.replace('bg-rose-600', 'bg-slate-800');
+        document.getElementById('recordingIndicatorDot').classList.remove('hidden');
+
+        showToast("🎙️ 課堂錄音已正常啟動！", "success");
+      }
+
+      navigator.mediaDevices.getUserMedia(audioConstraints).then(proceedWithStream).catch(function(err) {
+        console.warn("進階收音失敗，嘗試最基礎模式:", err);
+        // 自動降級：嘗試最基礎的 audio: true 模式
+        return navigator.mediaDevices.getUserMedia({ audio: true }).then(proceedWithStream);
+      }).catch(function(err) {
+        console.error("麥克風最終取用失敗:", err);
+        appState.isRecording = false;
+        var noticeBar = document.getElementById('recordingNoticeBar');
+        if (noticeBar) noticeBar.classList.remove('hidden');
+
+        var isLineOrInApp = /Line|FBAN|FBAV|Instagram/i.test(navigator.userAgent);
+        if (isLineOrInApp) {
+          showToast("無法錄音：請點右下角 📤 選擇「在瀏覽器開啟」！", "error");
+          var alertBanner = document.getElementById('inAppBrowserAlert');
+          if (alertBanner) alertBanner.classList.remove('hidden');
+        } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          // 明確提示已被封鎖，彈出導引視窗
+          var modal = document.getElementById('micPermissionModal');
+          if (modal) modal.classList.remove('hidden');
+          showToast("麥克風已被瀏覽器封鎖，請點網址列左側開關允許！", "error");
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          showToast("電腦未偵測到麥克風硬體裝置，請檢查接線！", "error");
+        } else {
+          showToast("無法開啟麥克風 (" + err.name + ")，請檢查瀏覽器權限！", "error");
+        }
+      });
+    }
+
+    function stopAudioRecording() {
+      return new Promise(function(resolve) {
+        if (!appState.mediaRecorder || !appState.isRecording) {
+          resolve();
+          return;
+        }
+
+        try {
+          if (appState.mediaRecorder.state !== 'inactive') {
+            appState.mediaRecorder.requestData();
+          }
+        } catch (e) {}
+
+        appState.mediaRecorder.onstop = function() {
+          var type = appState.mediaRecorder ? appState.mediaRecorder.mimeType : 'audio/webm';
+          if (appState.recordedChunks.length > 0) {
+            appState.audioBlob = new Blob(appState.recordedChunks, { type: type });
+          }
+          if (appState.audioStream) {
+            appState.audioStream.getTracks().forEach(function(track) { track.stop(); });
+            appState.audioStream = null;
+          }
+          resolve();
+        };
+
+        try {
+          appState.mediaRecorder.stop();
+        } catch (e) {
+          resolve();
+        }
+
+        appState.isRecording = false;
+        document.getElementById('recordingBtnText').innerText = '啟動課堂錄音';
+        document.getElementById('audioRecordBtn').classList.replace('bg-slate-800', 'bg-rose-600');
+        document.getElementById('recordingIndicatorDot').classList.add('hidden');
+      });
+    }
+
+    function getReadyAudioBlob() {
+      if (appState.audioBlob && appState.audioBlob.size > 0) {
+        return Promise.resolve(appState.audioBlob);
+      }
+      if (appState.recordedChunks && appState.recordedChunks.length > 0) {
+        var mime = (appState.mediaRecorder && appState.mediaRecorder.mimeType) ? appState.mediaRecorder.mimeType : 'audio/webm';
+        appState.audioBlob = new Blob(appState.recordedChunks, { type: mime });
+        if (appState.audioBlob.size > 0) {
+          return Promise.resolve(appState.audioBlob);
+        }
+      }
+      return getCachedAudioChunksFromIDB().then(function(chunks) {
+        if (chunks && chunks.length > 0) {
+          var type = chunks[0].type || 'audio/webm';
+          appState.audioBlob = new Blob(chunks, { type: type });
+          return appState.audioBlob;
+        }
+        return null;
+      });
+    }
+
+    function downloadAudioLocally() {
+      var promise = (!appState.audioBlob || appState.audioBlob.size === 0) ? getCachedAudioChunksFromIDB() : Promise.resolve([]);
+      promise.then(function(chunks) {
+        if (chunks && chunks.length > 0) {
+          appState.audioBlob = new Blob(chunks, { type: chunks[0].type || 'audio/mp4' });
+        }
+
+        if (!appState.audioBlob || appState.audioBlob.size === 0) {
+          showToast("尚未有錄音檔可下載！", "warning");
+          return;
+        }
+
+        var folderName = (appState.obsDate || '觀課') + "-" + (appState.teacherName || '教師');
+        var ext = (appState.audioBlob.type && appState.audioBlob.type.indexOf('mp4') !== -1) ? '.mp4' : '.webm';
+        var fileName = folderName + "-課堂現場錄音" + ext;
+
+        var url = URL.createObjectURL(appState.audioBlob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+        showToast("錄音檔已開始下載至本機！", "success");
+      });
+    }
+
+    function downloadRescuedAudio() {
+      getCachedAudioChunksFromIDB().then(function(chunks) {
+        if (!chunks || chunks.length === 0) {
+          showToast("未找到可救援之音訊快取！", "warning");
+          return;
+        }
+        var type = chunks[0].type || 'audio/mp4';
+        var blob = new Blob(chunks, { type: type });
+        var ext = (type.indexOf('mp4') !== -1) ? '.mp4' : '.webm';
+        var today = new Date();
+        var fileName = "觀課錄音救援備份-" + today.getFullYear() + (today.getMonth() + 1) + today.getDate() + ext;
+
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+        showToast("已成功救回並下載快取錄音檔！", "success");
+      });
+    }
+
+    function checkRescuableAudio() {
+      getCachedAudioChunksFromIDB().then(function(chunks) {
+        if (chunks && chunks.length > 0) {
+          var totalSize = chunks.reduce(function(acc, c) { return acc + (c.size || 0); }, 0);
+          if (totalSize > 5000) {
+            var rescueBanner = document.getElementById('rescueAudioBanner');
+            if (rescueBanner) rescueBanner.classList.remove('hidden');
+          }
+        }
+      });
+    }
+
+    function manualInspectAndRescueAudio() {
+      getCachedAudioChunksFromIDB().then(function(chunks) {
+        if (!chunks || chunks.length === 0) {
+          showToast("本機快取內目前沒有未清除的錄音切片", "warning");
+          return;
+        }
+
+        var totalSize = chunks.reduce(function(acc, c) { return acc + (c.size || 0); }, 0);
+        var sizeMb = (totalSize / 1024 / 1024).toFixed(2);
+        var type = chunks[0].type || 'audio/mp4';
+        var blob = new Blob(chunks, { type: type });
+        var ext = (type.indexOf('mp4') !== -1 || type.indexOf('m4a') !== -1) ? '.mp4' : '.webm';
+        var fileName = "觀課錄音強制救援-" + sizeMb + "MB" + ext;
+
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+
+        showToast("🎉 成功尋獲快取！正在下載 " + sizeMb + " MB 錄音檔...", "success");
+      });
+    }
+
+    function detectAudioDuration(blob) {
+      return new Promise(function(resolve) {
+        try {
+          var audio = new Audio();
+          audio.src = URL.createObjectURL(blob);
+          audio.onloadedmetadata = function() {
+            if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration)) {
+              appState.audioDurationSeconds = Math.round(audio.duration);
+              appState.durationSource = 'audio';
+            } else {
+              appState.audioDurationSeconds = appState.elapsedSeconds;
+              appState.durationSource = 'observation_timer';
+            }
+            resolve(appState.audioDurationSeconds);
+          };
+          audio.onerror = function() {
+            appState.audioDurationSeconds = appState.elapsedSeconds;
+            appState.durationSource = 'observation_timer';
+            resolve(appState.audioDurationSeconds);
+          };
+        } catch (e) {
+          appState.audioDurationSeconds = appState.elapsedSeconds;
+          appState.durationSource = 'observation_timer';
+          resolve(appState.audioDurationSeconds);
+        }
+      });
+    }
+
+    function finishObservationAndProceed() {
+      if (appState.isObserving && appState.timerInterval) {
+        clearInterval(appState.timerInterval);
+        appState.timerInterval = null;
+        appState.isObserving = false;
+      }
+
+      var stopPromise = appState.isRecording ? stopAudioRecording() : Promise.resolve();
+
+      stopPromise.then(function() {
+        return getReadyAudioBlob();
+      }).then(function(blob) {
+        if (blob) {
+          detectAudioDuration(blob);
+        }
+        goToStep(3);
+        runAiAnalysis();
+      });
+    }
+
+    function determineScopeGate(durationSec) {
+      if (durationSec < 300) {
+        return {
+          scope: 'VERY_SHORT_CLIP',
+          scopeLabel: '極短片段／測試錄音 (小於5分鐘)',
+          confidence: 'LOW',
+          durationSeconds: durationSec,
+          limitations: [
+            '時長不足5分鐘，嚴禁判定整體課程結構、引起動機或統整活動完整度',
+            '不可推論整堂課時間分配或學生整體專注度',
+            '僅客觀描述片段內實際辨識到之聲音事實'
+          ]
+        };
+      } else if (durationSec < 900) {
+        return {
+          scope: 'PARTIAL_CLIP',
+          scopeLabel: '局部課堂片段 (5-15分鐘)',
+          confidence: 'MEDIUM',
+          durationSeconds: durationSec,
+          limitations: ['僅代表部分教學活動，不得推論整節課教學成效']
+        };
+      } else if (durationSec < 1800) {
+        return {
+          scope: 'PARTIAL_LESSON',
+          scopeLabel: '部分課堂觀察 (15-30分鐘)',
+          confidence: 'MEDIUM',
+          durationSeconds: durationSec,
+          limitations: ['涵蓋主要活動，但未完全包含完整課堂起承轉合']
+        };
+      } else {
+        return {
+          scope: 'EXTENDED_LESSON',
+          scopeLabel: '較完整課堂觀察 (30分鐘以上)',
+          confidence: 'HIGH',
+          durationSeconds: durationSec,
+          limitations: []
+        };
+      }
+    }
+
+    function runAiAnalysis() {
+      var effectiveSec = appState.audioDurationSeconds > 0 ? appState.audioDurationSeconds : appState.elapsedSeconds;
+      var scopeData = determineScopeGate(effectiveSec);
+      appState.analysisScope = scopeData.scope;
+      appState.scopeLabel = scopeData.scopeLabel;
+      appState.aiConfidence = scopeData.confidence;
+      appState.limitations = scopeData.limitations;
+
+      renderScopeDashboard(scopeData);
+      generateFactualFallbackAnalysis(scopeData);
+    }
+
+    function renderScopeDashboard(scopeData) {
+      var mins = String(Math.floor(scopeData.durationSeconds / 60)).padStart(2, '0');
+      var secs = String(Math.round(scopeData.durationSeconds % 60)).padStart(2, '0');
+      document.getElementById('scopeAudioDurationText').innerText = mins + ":" + secs + " (" + (appState.durationSource === 'audio' ? '音訊長度' : '觀課計時') + ")";
+      document.getElementById('scopeLabelText').innerText = scopeData.scopeLabel;
+      document.getElementById('scopeConfidenceText').innerText = scopeData.confidence === 'HIGH' ? '高 (完整觀課)' : (scopeData.confidence === 'MEDIUM' ? '中等' : '低 (片段/測試)');
+      document.getElementById('scopeClarityText').innerText = appState.speechClarity || '正常';
+
+      var badge = document.getElementById('aiScopeBadge');
+      badge.innerText = scopeData.scopeLabel;
+
+      var limitBox = document.getElementById('scopeLimitationsBox');
+      if (scopeData.limitations && scopeData.limitations.length > 0) {
+        limitBox.innerHTML = '<b>⚠️ 分析範圍限制：</b><ul class="list-disc pl-4 mt-1 space-y-0.5">' +
+          scopeData.limitations.map(function(l) { return '<li>' + l + '</li>'; }).join('') + '</ul>';
+        limitBox.classList.remove('hidden');
+      } else {
+        limitBox.classList.add('hidden');
+      }
+    }
+
+    function generateFactualFallbackAnalysis(scopeData) {
+      var sText = "【系統客觀記錄模式】\n本次錄音或分析時長約 " + Math.round(scopeData.durationSeconds / 60) + " 分鐘（範疇：" + scopeData.scopeLabel + "）。因未串接即時多模態語音服務，系統不進行任何臆測，直接客觀呈現質性記錄：\n\n";
+
+      if (appState.records.length > 0) {
+        sText += appState.records.map(function(r, idx) {
+          return (idx + 1) + ". 課堂時間 [" + r.timestamp + "]：" + r.text;
+        }).join('\n');
+      } else {
+        sText += "本次無手動輸入之質性文字紀錄。";
+      }
+
+      var gText = "目前客觀證據不足，依「無證據不做判斷」原則，不產生主觀缺失推論。";
+      var rText = "待取得完整課堂觀察紀錄或現場音訊分析後，再行提出具體教學精進策略。";
+
+      appState.aiStrengths = sText;
+      appState.aiGrowth = gText;
+      appState.aiSuggestions = rText;
+
+      document.getElementById('editAiStrengths').value = sText;
+      document.getElementById('editAiGrowth').value = gText;
+      document.getElementById('editAiSuggestions').value = rText;
+      showToast("已呈現客觀現場紀錄！", "info");
+    }
+
+    function saveEditsAndProceedToExport() {
+      appState.aiStrengths = document.getElementById('editAiStrengths').value.trim();
+      appState.aiGrowth = document.getElementById('editAiGrowth').value.trim();
+      appState.aiSuggestions = document.getElementById('editAiSuggestions').value.trim();
+
+      var folderName = (appState.obsDate || '觀課') + "-" + (appState.teacherName || '教師');
+      document.getElementById('exportDocName').innerText = folderName + "-新北市立大觀國民中學數位觀課記錄表";
+      document.getElementById('cloudSubfolderName').innerText = folderName;
+
+      getReadyAudioBlob().then(function(blob) {
+        var statusEl = document.getElementById('audioStatusText');
+        var player = document.getElementById('audioPreviewPlayer');
+        if (blob && blob.size > 0) {
+          var mb = (blob.size / 1024 / 1024).toFixed(2);
+          statusEl.innerHTML = '錄音檔狀態：<span class="text-emerald-600 font-bold">✅ 已就緒 (' + mb + ' MB)</span>';
+          if (player) {
+            player.src = URL.createObjectURL(blob);
+            player.classList.remove('hidden');
+          }
+        } else {
+          statusEl.innerHTML = '錄音檔狀態：<span class="text-rose-600 font-bold">⚠️ 未錄到聲音（請確認麥克風權限）</span>';
+          if (player) player.classList.add('hidden');
+        }
+      });
+
+      goToStep(4);
+    }
+
+    function buildStandardHtmlReport() {
+      var recordsRows = appState.records.length > 0 ? appState.records.map(function(r) {
+        return '<tr>' +
+          '<td style="border: 1px solid #000; padding: 6px; text-align: center; width: 90px; font-weight: bold; font-family: monospace;">' + escapeHtml(r.timestamp) + '</td>' +
+          '<td style="border: 1px solid #000; padding: 6px; text-align: left;">' + escapeHtml(r.text) + '</td>' +
+          '</tr>';
+      }).join('') : '<tr><td colspan="2" style="border: 1px solid #000; padding: 10px; text-align: center; color: #666;">（本次觀課未手動記錄質性時間序列）</td></tr>';
+
+      return '<div style="font-family: \'Noto Sans TC\', SimSun, sans-serif; max-width: 800px; margin: 0 auto; padding: 24px; color: #000; background: #fff; line-height: 1.5;">' +
+        '<div style="text-align: center; margin-bottom: 20px;">' +
+        '<h1 style="font-size: 20pt; font-weight: bold; margin: 0 0 6px 0; letter-spacing: 1px;">新北市立大觀國民中學 數位觀課記錄表</h1>' +
+        '<p style="font-size: 10pt; color: #444; margin: 0;">公開授課課堂觀察、專業質性回饋與綜合分析紀錄</p>' +
+        '</div>' +
+        '<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 10.5pt;">' +
+        '<tr style="background-color: #0e7490; color: #fff;">' +
+        '<th colspan="4" style="border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 11pt;">第一部分：觀課基本資訊</th>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; width: 18%; font-weight: bold; background: #f8fafc;">授課日期</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; width: 32%;">' + escapeHtml(appState.obsDate) + '</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; width: 18%; font-weight: bold; background: #f8fafc;">授課教師</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; width: 32%;">' + escapeHtml(appState.teacherName) + '</td>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; font-weight: bold; background: #f8fafc;">觀課教師</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px;">' + escapeHtml(appState.observerName) + '</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; font-weight: bold; background: #f8fafc;">授課科目</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px;">' + escapeHtml(appState.subjectName) + '</td>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; font-weight: bold; background: #f8fafc;">授課單元</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px;">' + escapeHtml(appState.unitName) + '</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; font-weight: bold; background: #f8fafc;">授課班級</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px;">' + escapeHtml(appState.className) + '</td>' +
+        '</tr>' +
+        '</table>' +
+        '<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 10pt;">' +
+        '<tr style="background-color: #0e7490; color: #fff;">' +
+        '<th colspan="2" style="border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 11pt;">第二部分：課堂教學質性觀察紀錄 (時間序列歷程)</th>' +
+        '</tr>' +
+        '<tr style="background-color: #f1f5f9; font-weight: bold;">' +
+        '<td style="border: 1px solid #000; padding: 6px; text-align: center; width: 90px;">課堂時間</td>' +
+        '<td style="border: 1px solid #000; padding: 6px; text-align: center;">具體教學活動歷程與師生互動事實</td>' +
+        '</tr>' +
+        recordsRows +
+        '</table>' +
+        '<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 10pt;">' +
+        '<tr style="background-color: #0e7490; color: #fff;">' +
+        '<th style="border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 11pt;">第三部分：課堂教學 AI 智慧分析與綜合專業回饋</th>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="border: 1px solid #000; padding: 8px;">' +
+        '<b style="color: #065f46;">一、課堂教學優點與亮點 (Strengths)</b>' +
+        '<div style="margin-top: 4px; white-space: pre-wrap; line-height: 1.6;">' + escapeHtml(appState.aiStrengths || '無特別登錄') + '</div>' +
+        '</td>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="border: 1px solid #000; padding: 8px;">' +
+        '<b style="color: #92400e;">二、課堂待改進之處 (Weaknesses)</b>' +
+        '<div style="margin-top: 4px; white-space: pre-wrap; line-height: 1.6;">' + escapeHtml(appState.aiGrowth || '無特別登錄') + '</div>' +
+        '</td>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="border: 1px solid #000; padding: 8px;">' +
+        '<b style="color: #1e40af;">三、行動精進建議 (Recommendations)</b>' +
+        '<div style="margin-top: 4px; white-space: pre-wrap; line-height: 1.6;">' + escapeHtml(appState.aiSuggestions || '無特別登錄') + '</div>' +
+        '</td>' +
+        '</tr>' +
+        '</table>' +
+        '<table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 10pt;">' +
+        '<tr style="background-color: #0e7490; color: #fff;">' +
+        '<th style="border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 11pt;">第四部分：議課後心得與回饋想法 (授課教師填寫)</th>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="border: 1px solid #000; padding: 12px; height: 110px; vertical-align: top; color: #777;">' +
+        '（請於共同備課/議課後手寫或打字填寫課後自我反思與心得...）' +
+        '</td>' +
+        '</tr>' +
+        '</table>' +
+        '<div style="display: flex; justify-content: space-between; margin-top: 30px; padding: 0 20px; font-size: 11pt; font-weight: bold;">' +
+        '<div>授課教師簽名：____________________（日期：&nbsp;&nbsp;&nbsp;&nbsp;年&nbsp;&nbsp;&nbsp;&nbsp;月&nbsp;&nbsp;&nbsp;&nbsp;日）</div>' +
+        '<div>觀課教師簽名：____________________（日期：&nbsp;&nbsp;&nbsp;&nbsp;年&nbsp;&nbsp;&nbsp;&nbsp;月&nbsp;&nbsp;&nbsp;&nbsp;日）</div>' +
+        '</div>' +
+        '</div>';
+    }
+
+    function downloadPdfDocument() {
+      var htmlContent = buildStandardHtmlReport();
+      var printWin = window.open('', '_blank');
+      if (!printWin) {
+        var area = document.getElementById('printArea');
+        area.innerHTML = htmlContent;
+        area.classList.remove('hidden');
+        window.print();
+        area.classList.add('hidden');
+        return;
+      }
+
+      printWin.document.open();
+      printWin.document.write('<!DOCTYPE html><html><head><title>' + (appState.obsDate || '') + '-' + (appState.teacherName || '') + '-新北市立大觀國民中學數位觀課記錄表</title><style>@page{size:A4 portrait;margin:15mm;}body{margin:0;padding:0;}</style></head><body>' + htmlContent + '</body></html>');
+      printWin.document.close();
+      setTimeout(function() { printWin.print(); }, 500);
+      showToast("已產生 PDF 預覽，可直接儲存為 PDF 或列印！", "success");
+    }
+
+    function printObservationReport() {
+      var area = document.getElementById('printArea');
+      area.innerHTML = buildStandardHtmlReport();
+      area.classList.remove('hidden');
+      window.print();
+      area.classList.add('hidden');
+    }
+
+    function buildWordBlob() {
+      var html = buildStandardHtmlReport();
+      var wordHtml = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>新北市立大觀國民中學數位觀課記錄表</title><style>body{font-family:'標楷體','Times New Roman',serif;font-size:11pt;}table{border-collapse:collapse;}td,th{border:1px solid #000;}</style></head><body>" + html + "</body></html>";
+      return new Blob(['\ufeff', wordHtml], { type: 'application/msword;charset=utf-8' });
+    }
+
+    function downloadWordDocument() {
+      try {
+        var blob = buildWordBlob();
+        var folderName = (appState.obsDate || '觀課') + "-" + (appState.teacherName || '教師');
+        var fileName = folderName + "-新北市立大觀國民中學數位觀課記錄表.doc";
+
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+        showToast("Word 紀錄表已成功下載！", "success");
+      } catch (err) {
+        console.error("Word 匯出失敗:", err);
+        showToast("Word 匯出失敗，請改用 PDF 下載！", "error");
+      }
+    }
+
+    function syncToGoogleDriveAndSheets() {
+      var btn = document.getElementById('btnSyncCloud');
+      var spinner = document.getElementById('syncSpinner');
+      var btnText = document.getElementById('syncBtnText');
+      var resultBox = document.getElementById('cloudSyncResultBox');
+      var linksContainer = document.getElementById('cloudLinksContainer');
+
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+      btnText.innerText = '正在封裝並上傳錄音、PDF、Word 至雲端...';
+      resultBox.classList.add('hidden');
+
+      var wordBlob = buildWordBlob();
+      var pdfHtmlBlob = new Blob([buildStandardHtmlReport()], { type: 'text/html;charset=utf-8' });
+
+      getReadyAudioBlob().then(function(audioBlob) {
+        return Promise.all([
+          blobToBase64(wordBlob),
+          blobToBase64(pdfHtmlBlob),
+          (audioBlob && audioBlob.size > 0) ? blobToBase64(audioBlob) : Promise.resolve("")
+        ]).then(function(results) {
+          var wordBase64 = results[0];
+          var pdfBase64 = results[1];
+          var audioBase64 = results[2];
+          var audioMime = (audioBlob && audioBlob.type) ? audioBlob.type : "audio/webm";
+
+          var subfolderName = (appState.obsDate || '觀課') + "-" + (appState.teacherName || '教師');
+
+          var payload = {
+            folderName: subfolderName,
+            meta: {
+              obsDate: appState.obsDate,
+              teacherName: appState.teacherName,
+              observerName: appState.observerName,
+              subjectName: appState.subjectName,
+              unitName: appState.unitName,
+              className: appState.className,
+              duration: formatCurrentTimestamp()
+            },
+            records: appState.records,
+            aiAnalysis: {
+              strengths: appState.aiStrengths,
+              growth: appState.aiGrowth,
+              suggestions: appState.aiSuggestions
+            },
+            audioData: audioBase64,
+            audioMime: audioMime,
+            docxData: wordBase64,
+            pdfData: pdfBase64
+          };
+
+          var targetUrl = appState.gasUrl || DEFAULT_GAS_WEB_APP_URL;
+          return fetch(targetUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+          });
+        });
+      }).then(function(resp) {
+        return resp.json();
+      }).then(function(res) {
+        if (res.status === 'success') {
+          showToast("🎉 觀課記錄與檔案已同步至 Google 雲端！", "success");
+          resultBox.classList.remove('hidden');
+
+          var subfolderName = (appState.obsDate || '觀課') + "-" + (appState.teacherName || '教師');
+          var linksHtml = '<div>📁 <b>專屬子資料夾：</b><a href="' + res.folderUrl + '" target="_blank" class="text-cyan-700 underline font-bold">點此開啟 ' + subfolderName + '</a></div>' +
+            '<div>📊 <b>觀課總表試算表：</b><a href="' + res.spreadsheetUrl + '" target="_blank" class="text-emerald-700 underline font-bold">點此開啟「數位觀課總表」</a></div>';
+
+          if (res.docxUrl) {
+            linksHtml += '<div>📝 <b>Word 紀錄表：</b><a href="' + res.docxUrl + '" target="_blank" class="text-blue-700 underline">線上查看 Word 檔案</a></div>';
+          }
+          if (res.pdfUrl) {
+            linksHtml += '<div>📄 <b>PDF 紀錄表：</b><a href="' + res.pdfUrl + '" target="_blank" class="text-emerald-700 underline">線上查看 PDF 檔案</a></div>';
+          }
+          if (res.audioUrl) {
+            linksHtml += '<div>🎙️ <b>課堂現場錄音檔：</b><a href="' + res.audioUrl + '" target="_blank" class="text-rose-700 underline font-bold">線上收聽錄音檔 (上傳成功)</a></div>';
+          } else if (res.audioErrorMsg) {
+            linksHtml += '<div class="text-rose-600">⚠️ <b>音檔寫入提示：</b>' + res.audioErrorMsg + '</div>';
+          }
+
+          linksContainer.innerHTML = linksHtml;
+        } else {
+          throw new Error(res.message || '後端回傳錯誤');
+        }
+      }).catch(function(err) {
+        console.error("雲端同步失敗:", err);
+        showToast("同步失敗：" + err.message, "error");
+      }).finally(function() {
+        btn.disabled = false;
+        spinner.classList.add('hidden');
+        btnText.innerText = '☁️ 一鍵同步歸檔至 Google 雲端硬碟';
+      });
+    }
+
+    function blobToBase64(blob) {
+      return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onloadend = function() {
+          var res = reader.result;
+          if (typeof res === 'string' && res.indexOf('base64,') !== -1) {
+            resolve(res.split('base64,')[1]);
+          } else {
+            resolve(res);
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    function promptStartNewObservation() {
+      if (appState.isRecording) {
+        showToast("請先停止錄音再開新觀課！", "warning");
+        return;
+      }
+
+      var keepObserver = appState.observerName;
+      appState.obsDate = '';
+      appState.teacherName = '';
+      appState.subjectName = '';
+      appState.unitName = '';
+      appState.className = '';
+      appState.elapsedSeconds = 0;
+      if (appState.timerInterval) {
+        clearInterval(appState.timerInterval);
+        appState.timerInterval = null;
+      }
+      appState.isObserving = false;
+      appState.records = [];
+      appState.recordedChunks = [];
+      appState.audioBlob = null;
+      appState.audioDurationSeconds = 0;
+      appState.aiStrengths = '';
+      appState.aiGrowth = '';
+      appState.aiSuggestions = '';
+
+      clearAudioChunksFromIDB();
+      localStorage.removeItem('daguan_obs_autosave');
+
+      if (document.getElementById('teacherName')) document.getElementById('teacherName').value = '';
+      if (document.getElementById('subjectName')) document.getElementById('subjectName').value = '';
+      if (document.getElementById('unitName')) document.getElementById('unitName').value = '';
+      if (document.getElementById('className')) document.getElementById('className').value = '';
+      if (document.getElementById('observerName')) document.getElementById('observerName').value = keepObserver;
+      if (document.getElementById('observationTimerDisplay')) document.getElementById('observationTimerDisplay').innerText = '00:00';
+      if (document.getElementById('editAiStrengths')) document.getElementById('editAiStrengths').value = '';
+      if (document.getElementById('editAiGrowth')) document.getElementById('editAiGrowth').value = '';
+      if (document.getElementById('editAiSuggestions')) document.getElementById('editAiSuggestions').value = '';
+
+      var resultBox = document.getElementById('cloudSyncResultBox');
+      if (resultBox) resultBox.classList.add('hidden');
+
+      initDefaultDate();
+      renderRecordsList();
+      goToStep(1);
+      showToast("已重設觀課環境，歡迎進行下一堂課！", "info");
+    }
+
+    function openGasSettingsModal() {
+      document.getElementById('settingGasUrl').value = appState.gasUrl || DEFAULT_GAS_WEB_APP_URL;
+      document.getElementById('gasSettingsModal').classList.remove('hidden');
+    }
+
+    function closeGasSettingsModal() {
+      document.getElementById('gasSettingsModal').classList.add('hidden');
+    }
+
+    function showToast(msg, type) {
+      type = type || 'info';
+      var container = document.getElementById('toastContainer');
+      if (!container) return;
+      var toast = document.createElement('div');
+      var colors = {
+        success: 'bg-emerald-600 text-white',
+        error: 'bg-rose-600 text-white',
+        warning: 'bg-amber-600 text-white',
+        info: 'bg-slate-800 text-white'
+      };
+      toast.className = (colors[type] || colors.info) + " px-4 py-2.5 rounded-xl shadow-lg text-xs sm:text-sm font-medium transition-all transform duration-300 translate-y-2 opacity-0 flex items-center space-x-2 pointer-events-auto";
+      toast.innerHTML = '<span>' + msg + '</span>';
+      container.appendChild(toast);
+
+      setTimeout(function() { toast.classList.remove('translate-y-2', 'opacity-0'); }, 50);
+      setTimeout(function() {
+        toast.classList.add('translate-y-2', 'opacity-0');
+        setTimeout(function() { toast.remove(); }, 300);
+      }, 3500);
+    }
+
+    window.deleteRecord = deleteRecord;
+
+    function bindAllEventListeners() {
+      var fillBtn = document.getElementById('btnFillMockData');
+      if (fillBtn) fillBtn.addEventListener('click', fillMockTestData);
+
+      var startBtn = document.getElementById('btnStartObs');
+      if (startBtn) startBtn.addEventListener('click', startObservationFlow);
+
+      var recordNoticeBtn = document.getElementById('btnNoticeStartRecord');
+      if (recordNoticeBtn) recordNoticeBtn.addEventListener('click', startAudioRecording);
+
+      var addRecBtn = document.getElementById('btnAddRecord');
+      if (addRecBtn) addRecBtn.addEventListener('click', addCurrentRecord);
+
+      var recInput = document.getElementById('recordInput');
+      if (recInput) {
+        recInput.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            addCurrentRecord();
+          }
+        });
+      }
+
+      var finishBtn = document.getElementById('btnFinishObs');
+      if (finishBtn) finishBtn.addEventListener('click', finishObservationAndProceed);
+
+      var reAnalyzeBtn = document.getElementById('btnReAnalyze');
+      if (reAnalyzeBtn) reAnalyzeBtn.addEventListener('click', runAiAnalysis);
+
+      var backStep2Btn = document.getElementById('btnBackToStep2');
+      if (backStep2Btn) backStep2Btn.addEventListener('click', function() { goToStep(2); });
+
+      var proceedStep4Btn = document.getElementById('btnProceedToStep4');
+      if (proceedStep4Btn) proceedStep4Btn.addEventListener('click', saveEditsAndProceedToExport);
+
+      var dlAudioBtn = document.getElementById('btnDownloadAudioLocal');
+      if (dlAudioBtn) dlAudioBtn.addEventListener('click', downloadAudioLocally);
+
+      var dlPdfBtn = document.getElementById('btnDownloadPdf');
+      if (dlPdfBtn) dlPdfBtn.addEventListener('click', downloadPdfDocument);
+
+      var dlWordBtn = document.getElementById('btnDownloadWord');
+      if (dlWordBtn) dlWordBtn.addEventListener('click', downloadWordDocument);
+
+      var printBtn = document.getElementById('btnPrintReport');
+      if (printBtn) printBtn.addEventListener('click', printObservationReport);
+
+      var syncBtn = document.getElementById('btnSyncCloud');
+      if (syncBtn) syncBtn.addEventListener('click', syncToGoogleDriveAndSheets);
+
+      var newObsTop = document.getElementById('btnNewObsTop');
+      if (newObsTop) newObsTop.addEventListener('click', promptStartNewObservation);
+
+      var newObsBottom = document.getElementById('btnNewObsBottom');
+      if (newObsBottom) newObsBottom.addEventListener('click', promptStartNewObservation);
+
+      var gasModalBtn = document.getElementById('btnGasSettingsModal');
+      if (gasModalBtn) gasModalBtn.addEventListener('click', openGasSettingsModal);
+
+      var closeGasX = document.getElementById('btnCloseGasModalX');
+      if (closeGasX) closeGasX.addEventListener('click', closeGasSettingsModal);
+
+      var closeGasBtn = document.getElementById('btnCloseGasModalBtn');
+      if (closeGasBtn) closeGasBtn.addEventListener('click', closeGasSettingsModal);
+
+      var manualRescueBtn = document.getElementById('btnManualRescue');
+      if (manualRescueBtn) manualRescueBtn.addEventListener('click', manualInspectAndRescueAudio);
+
+      var rescueAudioBtn = document.getElementById('btnDownloadRescuedAudio');
+      if (rescueAudioBtn) rescueAudioBtn.addEventListener('click', downloadRescuedAudio);
+
+      var closeRescueBanner = document.getElementById('btnCloseRescueBanner');
+      if (closeRescueBanner) closeRescueBanner.addEventListener('click', function() {
+        document.getElementById('rescueAudioBanner').remove();
+      });
+
+      var closeInApp = document.getElementById('btnCloseInAppAlert');
+      if (closeInApp) closeInApp.addEventListener('click', function() {
+        document.getElementById('inAppBrowserAlert').remove();
+      });
+
+      var closeMicModalBtn = document.getElementById('btnCloseMicModal');
+      if (closeMicModalBtn) closeMicModalBtn.addEventListener('click', function() {
+        document.getElementById('micPermissionModal').classList.add('hidden');
+      });
+
+      [1, 2, 3, 4].forEach(function(i) {
+        var tab = document.getElementById('stepTab' + i);
+        if (tab) {
+          tab.addEventListener('click', function() {
+            if (i <= appState.currentStep || appState.isObserving) {
+              goToStep(i);
+            }
+          });
+        }
+      });
+
+      var quickTags = document.querySelectorAll('.quick-tag-btn');
+      quickTags.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var tag = btn.getAttribute('data-tag');
+          if (tag) insertTag(tag);
+        });
+      });
+
+      window.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'hidden') autoSaveStateToLocalStorage();
+      });
+      window.addEventListener('pagehide', autoSaveStateToLocalStorage);
+      window.addEventListener('beforeunload', autoSaveStateToLocalStorage);
+    }
+
+    function initDaguanSystem() {
+      var isLineOrInApp = /Line|FBAN|FBAV|Instagram/i.test(navigator.userAgent);
+      if (isLineOrInApp) {
+        var alertBanner = document.getElementById('inAppBrowserAlert');
+        if (alertBanner) alertBanner.classList.remove('hidden');
+      }
+
+      bindAllEventListeners();
+      initDefaultDate();
+      initIndexedDB().then(function() {
+        tryRestoreStateFromLocalStorage();
+        checkRescuableAudio();
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initDaguanSystem);
+    } else {
+      initDaguanSystem();
+    }
+  </script>
+</body>
+</html>
