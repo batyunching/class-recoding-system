@@ -76,7 +76,7 @@
           <p class="text-xs text-slate-500 flex items-center space-x-1.5">
             <span>數位觀課與課堂智慧紀錄分析系統</span>
             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-              改版：2026/09/24 11:00 (原生 PDF 雲端直接預覽與 Word 雙軌支援)
+              改版：2026/09/24 12:40 (原生 Google 文件與 PDF 雙軌預覽支援)
             </span>
           </p>
         </div>
@@ -1518,11 +1518,14 @@
           var linksHtml = '<div>📁 <b>專屬子資料夾：</b><a href="' + res.folderUrl + '" target="_blank" class="text-cyan-700 underline font-bold">點此開啟 ' + subfolderName + '</a></div>' +
             '<div>📊 <b>觀課總表試算表：</b><a href="' + res.spreadsheetUrl + '" target="_blank" class="text-emerald-700 underline font-bold">點此開啟「數位觀課總表」</a></div>';
 
-          if (res.docxUrl) {
-            linksHtml += '<div>📝 <b>Word 紀錄表：</b><a href="' + res.docxUrl + '" target="_blank" class="text-blue-700 underline">線上查看 Word 檔案</a></div>';
+          if (res.googleDocUrl) {
+            linksHtml += '<div>📄 <b>Google 文件 (線上直接查看與編輯)：</b><a href="' + res.googleDocUrl + '" target="_blank" class="text-blue-700 underline font-bold">點此線上開啟 Google 文件</a></div>';
           }
           if (res.pdfUrl) {
-            linksHtml += '<div>📄 <b>PDF 紀錄表：</b><a href="' + res.pdfUrl + '" target="_blank" class="text-emerald-700 underline">線上查看 PDF 檔案</a></div>';
+            linksHtml += '<div>📑 <b>PDF 紀錄表 (免下載，線上預覽與列印)：</b><a href="' + res.pdfUrl + '" target="_blank" class="text-emerald-700 underline font-bold">點此線上預覽 PDF</a></div>';
+          }
+          if (res.docxUrl) {
+            linksHtml += '<div>📝 <b>Word 紀錄表 (微軟 Word 下載專用)：</b><a href="' + res.docxUrl + '" target="_blank" class="text-slate-600 underline">下載 .doc 檔案</a></div>';
           }
           if (res.audioUrl) {
             linksHtml += '<div>🎙️ <b>課堂現場錄音檔：</b><a href="' + res.audioUrl + '" target="_blank" class="text-rose-700 underline font-bold">線上收聽錄音檔 (上傳成功)</a></div>';
