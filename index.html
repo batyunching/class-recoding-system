@@ -76,7 +76,7 @@
           <p class="text-xs text-slate-500 flex items-center space-x-1.5">
             <span>數位觀課與課堂智慧紀錄分析系統</span>
             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-              改版：2026/09/24 09:35 (支援拍照不中斷錄音)
+              改版：2026/09/24 09:55 (修復雲端照片顯示與跨端預覽)
             </span>
           </p>
         </div>
@@ -1174,9 +1174,10 @@
       var photosHtmlSection = '';
       if (appState.photos.length > 0) {
         var photoCards = appState.photos.map(function(p, i) {
-          return '<div style="display: inline-block; width: 48%; margin: 1%; vertical-align: top; border: 1px solid #ccc; padding: 6px; box-sizing: border-box; background: #fafafa; text-align: center;">' +
-            '<img src="' + p.base64 + '" style="max-width: 100%; height: 160px; object-fit: contain; display: block; margin: 0 auto;">' +
-            '<div style="font-size: 9pt; color: #333; margin-top: 4px; font-weight: bold;">照片 ' + (i + 1) + ' [' + escapeHtml(p.timestamp) + '] ' + escapeHtml(p.note) + '</div>' +
+          var imgSrc = p.driveUrl || p.base64;
+          return '<div style="display: inline-block; width: 48%; margin: 1%; vertical-align: top; border: 1px solid #cbd5e1; padding: 8px; box-sizing: border-box; background: #f8fafc; text-align: center; border-radius: 8px;">' +
+            '<img src="' + imgSrc + '" style="max-width: 100%; height: 180px; object-fit: contain; display: block; margin: 0 auto; border-radius: 4px; background: #ffffff;" alt="課堂現場照片佐證">' +
+            '<div style="font-size: 9pt; color: #1e293b; margin-top: 6px; font-weight: bold;">照片 ' + (i + 1) + ' [' + escapeHtml(p.timestamp) + '] ' + escapeHtml(p.note) + '</div>' +
             '</div>';
         }).join('');
 
