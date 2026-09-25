@@ -76,7 +76,7 @@
           <p class="text-xs text-slate-500 flex items-center space-x-1.5 flex-wrap">
             <span>數位觀課與課堂智慧紀錄分析系統</span>
             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-              改版：2026/09/25 17:30 (Gemini 2.5 多模態真實錄音逐字對話分析)
+              改版：2026/09/25 22:15 (Gemini 高負載智慧重試與備援引擎)
             </span>
           </p>
         </div>
@@ -261,8 +261,8 @@
         <div class="flex items-center space-x-3">
           <span class="text-2xl animate-spin">🌀</span>
           <div>
-            <div class="font-bold text-sm text-cyan-300">Google Gemini 正在深入聆聽課堂真實錄音...</div>
-            <div class="text-xs text-slate-300 mt-1">
+            <div id="aiProgressTitle" class="font-bold text-sm text-cyan-300">Google Gemini 正在深入聆聽課堂真實錄音...</div>
+            <div id="aiProgressDesc" class="text-xs text-slate-300 mt-1">
               正在辨識課堂人聲、檢驗師生具體對話，並依教育部與新北市觀課規準進行「證據優先 (Evidence-First)」深度分析，請稍候約 10~25 秒...
             </div>
           </div>
@@ -1216,7 +1216,71 @@
     }
 
     /**
-     * 核心多模態 AI 分析函式：真正使用 Gemini 2.5 Flash 聆聽課堂錄音檔
+     * 輔助延遲函式（指數退避等待）
+     */
+    function delayMs(ms) {
+      return new Promise(function(resolve) { setTimeout(resolve, ms); });
+    }
+
+    /**
+     * 具備「指數退避重試」與「多模型自動備援」的 Gemini API 請求函式
+     */
+    function callGeminiWithFallbackAndRetry(reqBody, apiKey, onStatusUpdate) {
+      var candidateModels = [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-3-flash-preview"
+      ];
+
+      function tryModel(modelIndex, attempt) {
+        if (modelIndex >= candidateModels.length) {
+          return Promise.reject(new Error("所有 AI 模型引擎目前皆處於高負載尖峰，請稍候 30 秒再點擊「重新進行 Gemini 語音分析」。"));
+        }
+
+        var modelName = candidateModels[modelIndex];
+        var apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent?key=" + apiKey;
+
+        return fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(reqBody)
+        }).then(function(response) {
+          if (response.ok) {
+            return response.json();
+          }
+
+          return response.json().then(function(errData) {
+            var errMsg = (errData && errData.error && errData.error.message) ? errData.error.message : ("HTTP " + response.status);
+            var isHighDemand = (response.status === 503 || response.status === 429 || errMsg.indexOf("high demand") !== -1 || errMsg.indexOf("overloaded") !== -1 || errMsg.indexOf("quota") !== -1);
+
+            // 若遇高負載且重試次數 < 2，等待後退避重試同一個模型
+            if (isHighDemand && attempt < 2) {
+              var waitTime = (attempt + 1) * 1800;
+              if (onStatusUpdate) onStatusUpdate("遭遇伺服器尖峰，正在自動第 " + (attempt + 1) + " 次重試 (" + modelName + ")...");
+              return delayMs(waitTime).then(function() {
+                return tryModel(modelIndex, attempt + 1);
+              });
+            }
+
+            // 若該模型重試仍塞車，自動切換至下一個備援模型
+            if (isHighDemand && modelIndex + 1 < candidateModels.length) {
+              var nextModel = candidateModels[modelIndex + 1];
+              if (onStatusUpdate) onStatusUpdate("正在切換至穩定備援引擎 (" + nextModel + ")...");
+              return delayMs(1000).then(function() {
+                return tryModel(modelIndex + 1, 0);
+              });
+            }
+
+            throw new Error(errMsg);
+          });
+        });
+      }
+
+      return tryModel(0, 0);
+    }
+
+    /**
+     * 核心多模態 AI 分析函式：真正使用 Gemini 聆聽課堂錄音檔
      */
     function runRealGeminiAiAnalysis() {
       var dur = appState.elapsedSeconds;
@@ -1225,6 +1289,8 @@
 
       var noticeCard = document.getElementById('noApiKeyNoticeCard');
       var progressBox = document.getElementById('aiAnalyzingProgressBox');
+      var progressTitle = document.getElementById('aiProgressTitle');
+      var progressDesc = document.getElementById('aiProgressDesc');
 
       if (!appState.geminiApiKey) {
         if (noticeCard) noticeCard.classList.remove('hidden');
@@ -1235,6 +1301,8 @@
 
       if (noticeCard) noticeCard.classList.add('hidden');
       if (progressBox) progressBox.classList.remove('hidden');
+      if (progressTitle) progressTitle.innerText = "Google Gemini 正在深入聆聽課堂真實錄音...";
+      if (progressDesc) progressDesc.innerText = "正在辨識課堂人聲、檢驗師生具體對話，並依教育部與新北市觀課規準進行「證據優先 (Evidence-First)」深度分析，請稍候約 10~25 秒...";
       appState.isAiAnalyzing = true;
 
       // 取得就緒的錄音檔
@@ -1269,7 +1337,7 @@
           "- 觀課時長：" + durationText + "\n\n" +
           "【觀課教師時間戳紀錄】：\n" + (recordsSummary || "（本次觀課教師未輸入額外手動時間戳）") + "\n\n" +
           "【絕對嚴格之證據檢驗規準 (Evidence-First Guardrails)】：\n" +
-          "1. 每一項「教學優點與亮點」和「待改進之處」，【必須】具備真實時間標籤（如 [04:20]）以及【錄音中教師或學生的真實對話引言】（以『』引號標註，例如：老師提問『...』，學生回答『...』）！\n" +
+          "1. 每一項「教學優點與亮點」和「待改進之處」，【必須】具備真實時間標籤（如 [00:10]）以及【錄音中教師或學生的真實對話引言】（以『』引號標註，例如：老師提問『...』，學生回答『...』）！\n" +
           "2. 嚴禁任何無中生有、空泛無物的讚美或批評（如『教學架構清晰』卻無任何引證實例者一律無效）！若錄音中有雜音或沒說到的部分，直接標示『錄音未涵蓋，無法斷定』。\n" +
           "3. 提問層次分析：請精準指出教師在課堂中所提出的提問是屬於『封閉式/知識回憶』還是『開放式/理解推理』，並檢驗是否有給予足夠的思考等候時間（Wait Time）。\n" +
           "4. 行動精進建議：必須直接對應上述待改進之處中出現的真實課堂落差，提出下一堂課可立即操作的具體教學策略。\n\n" +
@@ -1306,21 +1374,9 @@
           }
         };
 
-        var apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + appState.geminiApiKey;
-
-        return fetch(apiUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(reqBody)
+        return callGeminiWithFallbackAndRetry(reqBody, appState.geminiApiKey, function(statusMsg) {
+          if (progressDesc) progressDesc.innerText = statusMsg;
         });
-      }).then(function(response) {
-        if (!response.ok) {
-          return response.json().then(function(errData) {
-            var msg = (errData && errData.error && errData.error.message) ? errData.error.message : ("HTTP " + response.status);
-            throw new Error(msg);
-          });
-        }
-        return response.json();
       }).then(function(apiResult) {
         var rawText = "";
         try {
