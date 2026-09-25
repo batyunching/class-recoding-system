@@ -6,6 +6,8 @@
   <title>新北市立大觀國民中學 數位觀課與課堂智慧紀錄分析系統</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- html2pdf.js 高解析 PDF 編譯引擎 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
     body {
@@ -76,7 +78,7 @@
           <p class="text-xs text-slate-500 flex items-center space-x-1.5 flex-wrap">
             <span>數位觀課與課堂智慧紀錄分析系統</span>
             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-              改版：2026/09/25 22:15 (新增自動同步 PDF 記錄表至雲端資料夾)
+              改版：2026/09/25 22:30 (一鍵同步保證自動產出 PDF 記錄表)
             </span>
           </p>
         </div>
@@ -1686,17 +1688,64 @@
       });
     }
 
+    /**
+     * 前端直接產生標準真實 PDF 二進位 Blob 物件 (相容手機與電腦)
+     */
+    function generatePdfBlob() {
+      return new Promise(function(resolve) {
+        if (!window.html2pdf) {
+          resolve(null);
+          return;
+        }
+        try {
+          var container = document.createElement('div');
+          container.style.position = 'absolute';
+          container.style.left = '-9999px';
+          container.style.top = '0';
+          container.style.width = '800px';
+          container.style.background = '#ffffff';
+          container.innerHTML = buildStandardHtmlReport(false);
+          document.body.appendChild(container);
+
+          var opt = {
+            margin:       [8, 8, 8, 8],
+            filename:     getStandardNamingBase() + '-數位觀課記錄表.pdf',
+            image:        { type: 'jpeg', quality: 0.95 },
+            html2canvas:  { scale: 2, useCORS: true, logging: false },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+          };
+
+          html2pdf().set(opt).from(container).outputPdf('blob').then(function(pdfBlob) {
+            if (container.parentNode) document.body.removeChild(container);
+            resolve(pdfBlob);
+          }).catch(function(e) {
+            console.warn("html2pdf 編譯失敗:", e);
+            if (container.parentNode) document.body.removeChild(container);
+            resolve(null);
+          });
+        } catch (err) {
+          console.warn("generatePdfBlob 執行例外:", err);
+          resolve(null);
+        }
+      });
+    }
+
     function downloadPdfDocument() {
-      var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>觀課記錄表</title></head><body style="margin:0;padding:20px;">' + buildStandardHtmlReport() + '</body></html>';
-      var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      var url = URL.createObjectURL(blob);
-      var filename = getStandardNamingBase() + '-數位觀課記錄表.html';
-      var a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast("已下載標準 HTML/PDF 紀錄表！", "success");
+      showToast("正在產生標準 PDF 紀錄表，請稍候...", "info");
+      generatePdfBlob().then(function(blob) {
+        if (blob && blob.size > 200) {
+          var filename = getStandardNamingBase() + '-數位觀課記錄表.pdf';
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast("已下載標準 PDF 紀錄表！", "success");
+        } else {
+          printObservationReport();
+        }
+      });
     }
 
     function downloadWordDocument() {
@@ -1734,12 +1783,17 @@
       if (resultBox) resultBox.classList.add('hidden');
 
       var wordBlob = buildWordBlob();
-      var pdfHtmlBlob = new Blob([buildStandardHtmlReport(false)], { type: 'text/html;charset=utf-8' });
 
-      return getReadyAudioBlob().then(function(audioBlob) {
+      return Promise.all([
+        getReadyAudioBlob(),
+        generatePdfBlob()
+      ]).then(function(resBlobs) {
+        var audioBlob = resBlobs[0];
+        var pdfBlob = resBlobs[1];
+
         return Promise.all([
           blobToBase64(wordBlob),
-          blobToBase64(pdfHtmlBlob),
+          pdfBlob ? blobToBase64(pdfBlob) : Promise.resolve(""),
           (audioBlob && audioBlob.size > 0) ? blobToBase64(audioBlob) : Promise.resolve("")
         ]).then(function(results) {
           var wordBase64 = results[0];
@@ -1785,18 +1839,15 @@
       }).then(function(res) {
         if (res.status === 'success') {
           appState.hasSyncedCloud = true;
-          showToast("🎉 觀課記錄、音檔與照片已同步至 Google 雲端！", "success");
+          showToast("🎉 觀課記錄、音檔、PDF、Word 與照片已同步至 Google 雲端！", "success");
           if (resultBox) resultBox.classList.remove('hidden');
 
           var subfolderName = getStandardNamingBase();
           var linksHtml = '<div>📁 <b>專屬子資料夾：</b><a href="' + res.folderUrl + '" target="_blank" class="text-cyan-700 underline font-bold">點此開啟 ' + subfolderName + '</a></div>' +
             '<div>📊 <b>觀課總表試算表：</b><a href="' + res.spreadsheetUrl + '" target="_blank" class="text-emerald-700 underline font-bold">點此開啟「數位觀課總表」</a></div>';
 
-          if (res.googleDocUrl) {
-            linksHtml += '<div>📄 <b>Google 文件 (線上直接查看與編輯)：</b><a href="' + res.googleDocUrl + '" target="_blank" class="text-blue-700 underline font-bold">點此線上開啟 Google 文件</a></div>';
-          }
           if (res.pdfUrl) {
-            linksHtml += '<div>📑 <b>PDF 紀錄表 (免下載，線上預覽與列印)：</b><a href="' + res.pdfUrl + '" target="_blank" class="text-emerald-700 underline font-bold">點此線上預覽與下載 PDF</a></div>';
+            linksHtml += '<div>📑 <b>PDF 紀錄表 (免下載，線上預覽與列印)：</b><a href="' + res.pdfUrl + '" target="_blank" class="text-emerald-700 underline font-bold">點此線上開啟 PDF 紀錄表</a></div>';
           }
           if (res.docxUrl) {
             linksHtml += '<div>📝 <b>Word 紀錄表 (微軟 Word 下載專用)：</b><a href="' + res.docxUrl + '" target="_blank" class="text-slate-600 underline">下載 .doc 檔案</a></div>';
