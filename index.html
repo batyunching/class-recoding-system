@@ -76,7 +76,7 @@
           <p class="text-xs text-slate-500 flex items-center space-x-1.5 flex-wrap">
             <span>數位觀課與課堂智慧紀錄分析系統</span>
             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-              改版：2026/09/25 22:15 (Gemini 高負載智慧重試與備援引擎)
+              改版：2026/09/25 22:15 (新增自動同步 PDF 記錄表至雲端資料夾)
             </span>
           </p>
         </div>
@@ -1796,7 +1796,7 @@
             linksHtml += '<div>📄 <b>Google 文件 (線上直接查看與編輯)：</b><a href="' + res.googleDocUrl + '" target="_blank" class="text-blue-700 underline font-bold">點此線上開啟 Google 文件</a></div>';
           }
           if (res.pdfUrl) {
-            linksHtml += '<div>📑 <b>PDF 紀錄表 (免下載，線上預覽與列印)：</b><a href="' + res.pdfUrl + '" target="_blank" class="text-emerald-700 underline font-bold">點此線上預覽 PDF</a></div>';
+            linksHtml += '<div>📑 <b>PDF 紀錄表 (免下載，線上預覽與列印)：</b><a href="' + res.pdfUrl + '" target="_blank" class="text-emerald-700 underline font-bold">點此線上預覽與下載 PDF</a></div>';
           }
           if (res.docxUrl) {
             linksHtml += '<div>📝 <b>Word 紀錄表 (微軟 Word 下載專用)：</b><a href="' + res.docxUrl + '" target="_blank" class="text-slate-600 underline">下載 .doc 檔案</a></div>';
