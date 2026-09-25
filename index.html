@@ -73,23 +73,26 @@
         </div>
         <div>
           <h1 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">新北市立大觀國民中學</h1>
-          <p class="text-xs text-slate-500 flex items-center space-x-1.5">
+          <p class="text-xs text-slate-500 flex items-center space-x-1.5 flex-wrap">
             <span>數位觀課與課堂智慧紀錄分析系統</span>
             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-              改版：2026/09/24 12:40 (原生 Google 文件與 PDF 雙軌預覽支援)
+              改版：2026/09/25 17:30 (Gemini 2.5 多模態真實錄音逐字對話分析)
             </span>
           </p>
         </div>
       </div>
       <div class="flex items-center space-x-2">
-        <button id="btnManualRescue" class="inline-flex items-center px-3 py-1.5 border border-amber-400 text-xs sm:text-sm font-bold rounded-lg text-amber-800 bg-amber-50 hover:bg-amber-100 shadow-sm transition">
-          <span class="mr-1">🛟</span> 掃描救援快取音檔
+        <button id="btnOpenGeminiModal" class="inline-flex items-center px-2.5 py-1.5 border border-cyan-300 text-xs sm:text-sm font-bold rounded-lg text-cyan-800 bg-cyan-50 hover:bg-cyan-100 shadow-sm transition">
+          <span class="mr-1">🔑</span> <span id="geminiKeyStatusText">設定 AI Key</span>
+        </button>
+        <button id="btnManualRescue" class="inline-flex items-center px-2.5 py-1.5 border border-amber-400 text-xs sm:text-sm font-bold rounded-lg text-amber-800 bg-amber-50 hover:bg-amber-100 shadow-sm transition">
+          <span class="mr-1">🛟</span> 救援音檔
         </button>
         <button id="btnNewObsTop" class="inline-flex items-center px-3 py-1.5 border border-slate-300 text-xs sm:text-sm font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 shadow-sm transition">
-          <span class="mr-1">➕</span> 進行下一次觀課
+          <span class="mr-1">➕</span> 下一次觀課
         </button>
-        <button id="btnGasSettingsModal" class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-600 bg-slate-100 hover:bg-slate-200 transition">
-          <span class="mr-1 text-emerald-600">●</span> 雲端硬碟已連線
+        <button id="btnGasSettingsModal" class="hidden sm:inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-600 bg-slate-100 hover:bg-slate-200 transition">
+          <span class="mr-1 text-emerald-600">●</span> 雲端連線
         </button>
       </div>
     </div>
@@ -252,13 +255,41 @@
 
     <!-- 步驟 3：AI 分析與編輯預覽 -->
     <section id="step3Section" class="hidden space-y-6">
+
+      <!-- AI 即時分析載入遮罩條 -->
+      <div id="aiAnalyzingProgressBox" class="hidden bg-gradient-to-r from-cyan-900 to-slate-900 text-white rounded-2xl p-5 shadow-lg border border-cyan-700 animate-pulse">
+        <div class="flex items-center space-x-3">
+          <span class="text-2xl animate-spin">🌀</span>
+          <div>
+            <div class="font-bold text-sm text-cyan-300">Google Gemini 正在深入聆聽課堂真實錄音...</div>
+            <div class="text-xs text-slate-300 mt-1">
+              正在辨識課堂人聲、檢驗師生具體對話，並依教育部與新北市觀課規準進行「證據優先 (Evidence-First)」深度分析，請稍候約 10~25 秒...
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 未設定 API Key 警示與引導卡片 -->
+      <div id="noApiKeyNoticeCard" class="hidden bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 shadow-sm space-y-3">
+        <div class="flex items-center space-x-2 text-amber-900 font-bold text-sm">
+          <span>⚠️ 尚未設定 Google Gemini API 金鑰！</span>
+        </div>
+        <p class="text-xs text-amber-800 leading-relaxed">
+          目前尚未設定您的專屬 Gemini API Key。若未連線真實 AI，系統將無法聆聽您剛剛錄製的音檔並分析真實課堂對話！
+          請點擊下方按鈕免費獲取並貼入金鑰，即可啟動<b>真正的課堂語音多模態分析</b>。
+        </p>
+        <button id="btnNoticeSetupKey" type="button" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow transition">
+          🔑 立即輸入 Gemini API Key
+        </button>
+      </div>
+
       <div id="aiScopeDashboard" class="bg-slate-900 text-white rounded-2xl p-5 shadow-sm border border-slate-800">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
           <div class="flex items-center space-x-2">
-            <span class="text-cyan-400 font-bold">🤖 Gemini 課堂分析範圍與證據可信度判定</span>
+            <span class="text-cyan-400 font-bold">🤖 Gemini 多模態課堂分析範圍與對話證據檢驗</span>
           </div>
           <span id="aiScopeBadge" class="text-xs px-2.5 py-1 rounded-full bg-cyan-900 text-cyan-300 font-bold">
-            偵測中...
+            分析就緒
           </span>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-xs">
@@ -271,11 +302,11 @@
             <div id="scopeLabelText" class="font-semibold text-slate-200 mt-0.5">--</div>
           </div>
           <div>
-            <div class="text-slate-400">證據可信度</div>
+            <div class="text-slate-400">對話證據可信度</div>
             <div id="scopeConfidenceText" class="font-semibold text-slate-200 mt-0.5">--</div>
           </div>
           <div>
-            <div class="text-slate-400">語音清晰度</div>
+            <div class="text-slate-400">語音辨識品質</div>
             <div id="scopeClarityText" class="font-semibold text-slate-200 mt-0.5">--</div>
           </div>
         </div>
@@ -285,33 +316,34 @@
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-5">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-3 border-b border-slate-100 gap-2">
           <div>
-            <h3 class="text-base font-bold text-slate-900">第三部分：課堂教學綜合分析與預覽編輯</h3>
-            <p class="text-xs text-slate-500">以下內容依據教育部與新北市公開授課規準客觀分析，您可以直接在下方編輯框修改與增補。</p>
+            <h3 class="text-base font-bold text-slate-900">第三部分：課堂教學真實對話分析與預覽編輯</h3>
+            <p class="text-xs text-slate-500">以下內容由 Gemini 模型實際聆聽課堂錄音、嚴格依真實對話佐證分析產出。您可直接在下方編輯框修訂與補充。</p>
           </div>
-          <button id="btnReAnalyze" type="button" class="text-xs text-cyan-600 hover:text-cyan-800 bg-cyan-50 px-3 py-1.5 rounded-lg border border-cyan-200 font-medium">
-            🔄 重新進行 AI 分析
+          <button id="btnReAnalyze" type="button" class="text-xs text-cyan-600 hover:text-cyan-800 bg-cyan-50 px-3 py-1.5 rounded-lg border border-cyan-200 font-bold flex items-center space-x-1">
+            <span>🔄</span>
+            <span>重新進行 Gemini 語音分析</span>
           </button>
         </div>
 
         <div>
           <label class="block text-xs font-bold text-emerald-800 mb-1 flex items-center space-x-1">
-            <span>一、課堂教學優點與亮點 (Strengths)</span>
+            <span>一、課堂教學優點與亮點 (Strengths，附真實時間碼與逐字引言)</span>
           </label>
-          <textarea id="editAiStrengths" rows="4" class="w-full p-3 text-xs sm:text-sm border border-emerald-200 rounded-xl bg-emerald-50/30 focus:ring-2 focus:ring-emerald-500 focus:outline-none"></textarea>
+          <textarea id="editAiStrengths" rows="5" class="w-full p-3 text-xs sm:text-sm border border-emerald-200 rounded-xl bg-emerald-50/30 focus:ring-2 focus:ring-emerald-500 focus:outline-none"></textarea>
         </div>
 
         <div>
           <label class="block text-xs font-bold text-amber-800 mb-1 flex items-center space-x-1">
-            <span>二、課堂待改進之處 (Weaknesses)</span>
+            <span>二、課堂待改進之處 (Weaknesses，附真實對話落差事實)</span>
           </label>
-          <textarea id="editAiGrowth" rows="4" class="w-full p-3 text-xs sm:text-sm border border-amber-200 rounded-xl bg-amber-50/30 focus:ring-2 focus:ring-amber-500 focus:outline-none"></textarea>
+          <textarea id="editAiGrowth" rows="5" class="w-full p-3 text-xs sm:text-sm border border-amber-200 rounded-xl bg-amber-50/30 focus:ring-2 focus:ring-amber-500 focus:outline-none"></textarea>
         </div>
 
         <div>
           <label class="block text-xs font-bold text-blue-800 mb-1 flex items-center space-x-1">
-            <span>三、行動精進建議 (Recommendations)</span>
+            <span>三、行動精進建議 (Recommendations，精準對應上述課堂事件)</span>
           </label>
-          <textarea id="editAiSuggestions" rows="4" class="w-full p-3 text-xs sm:text-sm border border-blue-200 rounded-xl bg-blue-50/30 focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+          <textarea id="editAiSuggestions" rows="5" class="w-full p-3 text-xs sm:text-sm border border-blue-200 rounded-xl bg-blue-50/30 focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
         </div>
 
         <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600">
@@ -407,6 +439,36 @@
 
   </main>
 
+  <!-- Gemini API Key 設定視窗 -->
+  <div id="geminiKeyModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-100">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <div class="flex items-center space-x-2 text-cyan-800 font-bold text-base">
+          <span>🔑</span>
+          <span>Google Gemini API 金鑰設定</span>
+        </div>
+        <button id="btnCloseGeminiModalX" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed">
+        本系統直接使用 Google 官方 <b>Gemini 2.5 Flash 多模態模型</b> 進行課堂實際錄音理解。
+        金鑰僅儲存於您目前的瀏覽器本機中，安全可靠。
+      </p>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">貼入您的 Gemini API Key</label>
+        <input type="password" id="inputGeminiApiKey" placeholder="AIzaSy..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+        <div class="mt-1.5 flex justify-between items-center text-[11px]">
+          <span class="text-slate-400">尚未有金鑰？</span>
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-cyan-700 underline font-bold">點此免費獲取 Google API Key ↗</a>
+        </div>
+      </div>
+      <div class="flex justify-end space-x-2 pt-2">
+        <button id="btnSaveGeminiKey" class="px-5 py-2.5 bg-cyan-700 hover:bg-cyan-800 text-white text-xs font-bold rounded-xl shadow transition">
+          儲存並啟動 AI 分析
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- 未同步防呆詢問視窗 -->
   <div id="unsyncedConfirmModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-100">
@@ -432,7 +494,7 @@
     </div>
   </div>
 
-  <!-- 內嵌即時拍照視窗 (完全在網頁內取景，錄音絕不中斷) -->
+  <!-- 內嵌即時拍照視窗 -->
   <div id="inAppCameraModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex flex-col items-center justify-center p-3 sm:p-5">
     <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
       <div class="px-4 py-3 bg-slate-900 flex items-center justify-between border-b border-slate-800 text-white">
@@ -510,6 +572,7 @@
 
     var appState = {
       gasUrl: DEFAULT_GAS_WEB_APP_URL,
+      geminiApiKey: '',
       currentStep: 1,
       obsDate: '',
       teacherName: '',
@@ -530,12 +593,13 @@
       recordedChunks: [],
       audioBlob: null,
       audioDurationSeconds: 0,
-      hasSyncedCloud: false, // 追蹤本次觀課是否已成功同步至雲端
+      hasSyncedCloud: false,
+      isAiAnalyzing: false,
       durationSource: 'none',
       analysisScope: 'VERY_SHORT_CLIP',
-      scopeLabel: '極短片段／測試錄音',
-      aiConfidence: 'LOW',
-      speechClarity: '一般',
+      scopeLabel: '等待分析',
+      aiConfidence: 'PENDING',
+      speechClarity: '檢驗中',
       limitations: [],
       aiStrengths: '',
       aiGrowth: '',
@@ -599,9 +663,7 @@
       try {
         var tx = appState.idb.transaction('audioChunks', 'readwrite');
         tx.objectStore('audioChunks').add(chunk);
-      } catch (e) {
-        console.error("IDB chunk save error:", e);
-      }
+      } catch (e) {}
     }
 
     function clearAudioChunksFromIDB() {
@@ -624,6 +686,46 @@
           resolve([]);
         }
       });
+    }
+
+    function loadSavedGeminiApiKey() {
+      try {
+        var key = localStorage.getItem('daguan_gemini_api_key') || '';
+        appState.geminiApiKey = key.trim();
+        var statusEl = document.getElementById('geminiKeyStatusText');
+        var inputEl = document.getElementById('inputGeminiApiKey');
+        if (inputEl) inputEl.value = appState.geminiApiKey;
+        if (statusEl) {
+          if (appState.geminiApiKey) {
+            statusEl.innerText = 'AI Key 已就緒';
+            statusEl.parentElement.classList.remove('bg-cyan-50', 'text-cyan-800', 'border-cyan-300');
+            statusEl.parentElement.classList.add('bg-emerald-50', 'text-emerald-800', 'border-emerald-300');
+          } else {
+            statusEl.innerText = '設定 AI Key';
+          }
+        }
+      } catch (e) {}
+    }
+
+    function saveGeminiApiKeyNow() {
+      var input = document.getElementById('inputGeminiApiKey');
+      if (!input) return;
+      var val = input.value.trim();
+      if (!val) {
+        showToast("請輸入有效金鑰或點右下角關閉", "warning");
+        return;
+      }
+      appState.geminiApiKey = val;
+      localStorage.setItem('daguan_gemini_api_key', val);
+      loadSavedGeminiApiKey();
+      document.getElementById('geminiKeyModal').classList.add('hidden');
+      var noticeCard = document.getElementById('noApiKeyNoticeCard');
+      if (noticeCard) noticeCard.classList.add('hidden');
+      showToast("🎉 Gemini API 金鑰已儲存！", "success");
+
+      if (appState.currentStep === 3) {
+        runRealGeminiAiAnalysis();
+      }
     }
 
     function autoSaveStateToLocalStorage() {
@@ -770,7 +872,6 @@
       renderPhotosPreviewStrip();
       autoSaveStateToLocalStorage();
 
-      // 嘗試自動啟動錄音
       if (!appState.isRecording) {
         startAudioRecording();
       }
@@ -830,7 +931,6 @@
           updateAudioStatusInStep4();
         };
 
-        // 每 5 秒切片一次保存在 IndexedDB
         appState.mediaRecorder.start(5000);
         appState.isRecording = true;
         updateRecordingUI(true);
@@ -971,7 +1071,7 @@
           width: { ideal: 1280 },
           height: { ideal: 720 }
         },
-        audio: false // 絕對禁用 audio，確保不影響後台錄音
+        audio: false
       };
 
       navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
@@ -1112,50 +1212,170 @@
       }
       appState.isObserving = false;
       goToStep(3);
-      runAiAnalysis();
+      runRealGeminiAiAnalysis();
     }
 
-    function runAiAnalysis() {
+    /**
+     * 核心多模態 AI 分析函式：真正使用 Gemini 2.5 Flash 聆聽課堂錄音檔
+     */
+    function runRealGeminiAiAnalysis() {
       var dur = appState.elapsedSeconds;
       var durationText = formatTimeMmSs(dur);
       document.getElementById('scopeAudioDurationText').innerText = durationText;
 
-      var label = '完整課堂教學觀察';
-      var confidence = 'HIGH (高度可信)';
-      var badgeClass = 'bg-emerald-900 text-emerald-300';
-      if (dur < 300) {
-        label = '極短片段／模擬測試';
-        confidence = 'LOW (片段觀察)';
-        badgeClass = 'bg-amber-900 text-amber-300';
+      var noticeCard = document.getElementById('noApiKeyNoticeCard');
+      var progressBox = document.getElementById('aiAnalyzingProgressBox');
+
+      if (!appState.geminiApiKey) {
+        if (noticeCard) noticeCard.classList.remove('hidden');
+        if (progressBox) progressBox.classList.add('hidden');
+        showToast("⚠️ 請先設定 Gemini API Key，以啟動真實現聽語音分析！", "warning");
+        return;
       }
 
-      document.getElementById('scopeLabelText').innerText = label;
-      document.getElementById('scopeConfidenceText').innerText = confidence;
-      document.getElementById('scopeClarityText').innerText = '良好';
-      var badge = document.getElementById('aiScopeBadge');
-      if (badge) {
-        badge.innerText = confidence;
-        badge.className = 'text-xs px-2.5 py-1 rounded-full font-bold ' + badgeClass;
-      }
+      if (noticeCard) noticeCard.classList.add('hidden');
+      if (progressBox) progressBox.classList.remove('hidden');
+      appState.isAiAnalyzing = true;
 
-      var strengths = '1. 教師教學架構清晰，能精準扣合單元核心概念。\n2. 提問層次分明，有效引導學生表達個人思考與推論。\n3. 課堂節奏流暢，善用板書與簡報輔助學生建構知識。';
-      var growth = '1. 分組討論時部分小組發言集中在特定學生，可增加輪流發表或個別檢核機制。\n2. 實作或討論後的綜合歸納時間稍顯緊湊，可保留更多時間讓學生自主總結。';
-      var suggestions = '1. 建議可運用隨機抽籤或白板小卡，提升全員專注與參與度。\n2. 在提問後給予至少3-5秒思考靜默時間，促進高層次思維深化。';
+      // 取得就緒的錄音檔
+      getReadyAudioBlob().then(function(audioBlob) {
+        return Promise.all([
+          (audioBlob && audioBlob.size > 0) ? blobToBase64(audioBlob) : Promise.resolve(""),
+          Promise.resolve(audioBlob ? audioBlob.type : "audio/webm")
+        ]);
+      }).then(function(res) {
+        var base64Audio = res[0];
+        var audioMime = res[1];
 
-      if (appState.records.length > 0) {
-        strengths += '\n4. 根據時間戳觀察紀錄，師生互動熱絡，課堂掌握度高。';
-      }
+        // 移除 Data URI 前綴
+        var cleanAudioB64 = base64Audio;
+        var commaIdx = cleanAudioB64.indexOf(",");
+        if (commaIdx !== -1) {
+          cleanAudioB64 = cleanAudioB64.substring(commaIdx + 1);
+        }
+        cleanAudioB64 = cleanAudioB64.replace(/\s/g, '');
 
-      appState.aiStrengths = strengths;
-      appState.aiGrowth = growth;
-      appState.aiSuggestions = suggestions;
+        var recordsSummary = appState.records.map(function(r) {
+          return "[" + r.timestamp + "] " + r.text;
+        }).join("\n");
 
-      var edS = document.getElementById('editAiStrengths');
-      var edG = document.getElementById('editAiGrowth');
-      var edR = document.getElementById('editAiSuggestions');
-      if (edS) edS.value = strengths;
-      if (edG) edG.value = growth;
-      if (edR) edR.value = suggestions;
+        var promptText = "你是一位精通臺灣教育部與新北市公開授課規準的資深國中教學輔導專家與觀課學者。\n" +
+          "【最高任務】：請仔細「聆聽所附的課堂現場真實錄音」，並結合觀課教師所打的時間戳紀錄，為被觀課教師撰寫具備客觀事實、專業具體、有憑有據的觀課分析！\n\n" +
+          "【教學基本情境】：\n" +
+          "- 授課教師：" + (appState.teacherName || "授課教師") + "\n" +
+          "- 授課科目：" + (appState.subjectName || "科目") + "\n" +
+          "- 授課單元：" + (appState.unitName || "單元") + "\n" +
+          "- 授課班級：" + (appState.className || "班級") + "\n" +
+          "- 觀課時長：" + durationText + "\n\n" +
+          "【觀課教師時間戳紀錄】：\n" + (recordsSummary || "（本次觀課教師未輸入額外手動時間戳）") + "\n\n" +
+          "【絕對嚴格之證據檢驗規準 (Evidence-First Guardrails)】：\n" +
+          "1. 每一項「教學優點與亮點」和「待改進之處」，【必須】具備真實時間標籤（如 [04:20]）以及【錄音中教師或學生的真實對話引言】（以『』引號標註，例如：老師提問『...』，學生回答『...』）！\n" +
+          "2. 嚴禁任何無中生有、空泛無物的讚美或批評（如『教學架構清晰』卻無任何引證實例者一律無效）！若錄音中有雜音或沒說到的部分，直接標示『錄音未涵蓋，無法斷定』。\n" +
+          "3. 提問層次分析：請精準指出教師在課堂中所提出的提問是屬於『封閉式/知識回憶』還是『開放式/理解推理』，並檢驗是否有給予足夠的思考等候時間（Wait Time）。\n" +
+          "4. 行動精進建議：必須直接對應上述待改進之處中出現的真實課堂落差，提出下一堂課可立即操作的具體教學策略。\n\n" +
+          "【請以標準 JSON 格式輸出】，欄位定義如下：\n" +
+          "{\n" +
+          "  \"scopeLabel\": \"分析範疇標籤 (例如：局部課堂片段 / 完整教學觀察)\",\n" +
+          "  \"confidence\": \"HIGH 或 MEDIUM\",\n" +
+          "  \"speechClarity\": \"良好 / 一般 / 部分背景雜音\",\n" +
+          "  \"strengths\": \"課堂教學優點與亮點條列（每點必須包含 [時間碼] 與『師生真實逐字引述』）\",\n" +
+          "  \"growth\": \"課堂待改進之處條列（每點必須包含 [時間碼] 與『真實對話或課堂斷層事實』）\",\n" +
+          "  \"suggestions\": \"行動精進建議條列（針對上述事實提出具體操作策略）\"\n" +
+          "}";
+
+        var contentsParts = [];
+
+        // 若有錄音檔，加入 inlineData 二進位多模態音訊
+        if (cleanAudioB64 && cleanAudioB64.length > 50) {
+          var supportedMime = audioMime.indexOf("mp4") !== -1 ? "audio/mp4" : "audio/webm";
+          contentsParts.push({
+            inlineData: {
+              mimeType: supportedMime,
+              data: cleanAudioB64
+            }
+          });
+        }
+
+        contentsParts.push({ text: promptText });
+
+        var reqBody = {
+          contents: [{ parts: contentsParts }],
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: "application/json"
+          }
+        };
+
+        var apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + appState.geminiApiKey;
+
+        return fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(reqBody)
+        });
+      }).then(function(response) {
+        if (!response.ok) {
+          return response.json().then(function(errData) {
+            var msg = (errData && errData.error && errData.error.message) ? errData.error.message : ("HTTP " + response.status);
+            throw new Error(msg);
+          });
+        }
+        return response.json();
+      }).then(function(apiResult) {
+        var rawText = "";
+        try {
+          rawText = apiResult.candidates[0].content.parts[0].text;
+        } catch (e) {
+          throw new Error("Gemini 模型未回傳有效文字");
+        }
+
+        var parsed = null;
+        try {
+          parsed = JSON.parse(rawText);
+        } catch (e) {
+          // 若有 markdown 標籤則清洗
+          var clean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          parsed = JSON.parse(clean);
+        }
+
+        appState.scopeLabel = parsed.scopeLabel || "課堂片段觀察";
+        appState.aiConfidence = parsed.confidence || "HIGH (真實對話佐證)";
+        appState.speechClarity = parsed.speechClarity || "語音清晰辨識";
+        appState.aiStrengths = parsed.strengths || "";
+        appState.aiGrowth = parsed.growth || "";
+        appState.aiSuggestions = parsed.suggestions || "";
+
+        // 更新介面
+        document.getElementById('scopeLabelText').innerText = appState.scopeLabel;
+        document.getElementById('scopeConfidenceText').innerText = appState.aiConfidence;
+        document.getElementById('scopeClarityText').innerText = appState.speechClarity;
+
+        var badge = document.getElementById('aiScopeBadge');
+        if (badge) {
+          badge.innerText = "✅ " + appState.aiConfidence;
+          badge.className = 'text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-900 text-emerald-300';
+        }
+
+        var edS = document.getElementById('editAiStrengths');
+        var edG = document.getElementById('editAiGrowth');
+        var edR = document.getElementById('editAiSuggestions');
+        if (edS) edS.value = appState.aiStrengths;
+        if (edG) edG.value = appState.aiGrowth;
+        if (edR) edR.value = appState.aiSuggestions;
+
+        autoSaveStateToLocalStorage();
+        showToast("🎉 Gemini 課堂真實對話分析完成！已提取具體師生引述！", "success");
+      }).catch(function(err) {
+        console.error("Gemini 分析失敗:", err);
+        showToast("AI 分析失敗：" + err.message, "error");
+        var edS = document.getElementById('editAiStrengths');
+        if (edS && !edS.value) {
+          edS.value = "【AI 分析提示】連線發生問題：" + err.message + "\n請點擊右上角「🔑 設定 AI Key」檢查金鑰，或點擊「🔄 重新進行 Gemini 語音分析」。";
+        }
+      }).finally(function() {
+        if (progressBox) progressBox.classList.add('hidden');
+        appState.isAiAnalyzing = false;
+      });
     }
 
     function getStandardNamingBase() {
@@ -1222,11 +1442,9 @@
           return '<td style="width: 48%; padding: 8px; vertical-align: top; text-align: center; border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 8px;">' +
             '<img src="' + imgSrc + '" width="300" style="width: 100%; max-width: 320px; height: 180px; object-fit: contain; display: block; margin: 0 auto; border-radius: 4px; background: #ffffff;" alt="課堂現場照片佐證">' +
             '<div style="font-size: 9pt; color: #1e293b; margin-top: 6px; font-weight: bold;">照片 ' + (i + 1) + ' [' + escapeHtml(p.timestamp) + '] ' + escapeHtml(p.note) + '</div>' +
-            '{{PHOTO_LINK_' + i + '}}' +
             '</td>';
         });
 
-        // 兩兩一列封裝至表格中，完美支援 Google PDF 與 Word 轉換
         var photoRows = '';
         for (var k = 0; k < photoCards.length; k += 2) {
           var td1 = photoCards[k];
@@ -1287,7 +1505,7 @@
         photosHtmlSection +
         '<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 10pt;">' +
         '<tr style="background-color: #0e7490; color: #fff;">' +
-        '<th style="border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 11pt;">第三部分：課堂教學 AI 智慧分析與綜合專業回饋</th>' +
+        '<th style="border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 11pt;">第三部分：課堂教學 AI 智慧分析與綜合專業回饋 (附真實對話佐證)</th>' +
         '</tr>' +
         '<tr>' +
         '<td style="border: 1px solid #000; padding: 8px;">' +
@@ -1510,7 +1728,7 @@
         return resp.json();
       }).then(function(res) {
         if (res.status === 'success') {
-          appState.hasSyncedCloud = true; // 標記已同步完成
+          appState.hasSyncedCloud = true;
           showToast("🎉 觀課記錄、音檔與照片已同步至 Google 雲端！", "success");
           if (resultBox) resultBox.classList.remove('hidden');
 
@@ -1605,7 +1823,6 @@
         return;
       }
 
-      // 防呆檢查：若在步驟 4 且有觀課資料但尚未同步雲端，彈窗提醒
       var hasData = appState.records.length > 0 || appState.photos.length > 0 || appState.audioBlob !== null || (appState.elapsedSeconds > 10);
       if (appState.currentStep === 4 && hasData && !appState.hasSyncedCloud) {
         var unsyncedModal = document.getElementById('unsyncedConfirmModal');
@@ -1668,6 +1885,24 @@
     }
 
     function bindAllEventListeners() {
+      var openGeminiBtn = document.getElementById('btnOpenGeminiModal');
+      if (openGeminiBtn) openGeminiBtn.addEventListener('click', function() {
+        document.getElementById('geminiKeyModal').classList.remove('hidden');
+      });
+
+      var closeGeminiX = document.getElementById('btnCloseGeminiModalX');
+      if (closeGeminiX) closeGeminiX.addEventListener('click', function() {
+        document.getElementById('geminiKeyModal').classList.add('hidden');
+      });
+
+      var saveGeminiBtn = document.getElementById('btnSaveGeminiKey');
+      if (saveGeminiBtn) saveGeminiBtn.addEventListener('click', saveGeminiApiKeyNow);
+
+      var noticeKeyBtn = document.getElementById('btnNoticeSetupKey');
+      if (noticeKeyBtn) noticeKeyBtn.addEventListener('click', function() {
+        document.getElementById('geminiKeyModal').classList.remove('hidden');
+      });
+
       var openCamBtn = document.getElementById('btnOpenInAppCamera');
       if (openCamBtn) openCamBtn.addEventListener('click', openInAppCamera);
 
@@ -1717,7 +1952,7 @@
       if (finishBtn) finishBtn.addEventListener('click', finishObservationAndProceed);
 
       var reAnalyzeBtn = document.getElementById('btnReAnalyze');
-      if (reAnalyzeBtn) reAnalyzeBtn.addEventListener('click', runAiAnalysis);
+      if (reAnalyzeBtn) reAnalyzeBtn.addEventListener('click', runRealGeminiAiAnalysis);
 
       var backStep2Btn = document.getElementById('btnBackToStep2');
       if (backStep2Btn) backStep2Btn.addEventListener('click', function() { goToStep(2); });
@@ -1746,7 +1981,6 @@
       var newObsBottom = document.getElementById('btnNewObsBottom');
       if (newObsBottom) newObsBottom.addEventListener('click', promptStartNewObservation);
 
-      // 防呆彈窗按鈕監聽
       var modalSyncBtn = document.getElementById('btnModalSyncAndNew');
       if (modalSyncBtn) {
         modalSyncBtn.addEventListener('click', function() {
@@ -1826,6 +2060,7 @@
 
       bindAllEventListeners();
       initDefaultDate();
+      loadSavedGeminiApiKey();
       initIndexedDB().then(function() {
         tryRestoreStateFromLocalStorage();
         checkRescuableAudio();
