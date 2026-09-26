@@ -78,7 +78,7 @@
           <p class="text-xs text-slate-500 flex items-center space-x-1.5 flex-wrap">
             <span>數位觀課與課堂智慧紀錄分析系統</span>
             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-              改版：2026/09/25 22:45 (保證 PDF 內容真實渲染與影像佐證完整入庫)
+              改版：2026/09/26 15:30 (修復 PDF 雲端原生轉譯與 AI 物件展平)
             </span>
           </p>
         </div>
@@ -385,7 +385,7 @@
               <span>🎙️ 下載課堂錄音檔 (本機備份)</span>
             </button>
             <button id="btnDownloadPdf" type="button" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow transition flex items-center justify-center space-x-2">
-              <span>📄 下載標準 PDF 紀錄表 (手機最佳)</span>
+              <span>📄 下載標準 PDF 紀錄表 (本機下載)</span>
             </button>
             <button id="btnDownloadWord" type="button" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-xs sm:text-sm shadow transition flex items-center justify-center space-x-2">
               <span>📝 下載 Word 紀錄表 (.doc/.docx)</span>
@@ -617,6 +617,37 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+    }
+
+    function formatAiOutput(val) {
+      if (!val) return '';
+      if (typeof val === 'string') return val;
+      if (Array.isArray(val)) {
+        return val.map(function(item, idx) {
+          if (typeof item === 'string') return item;
+          if (typeof item === 'object' && item !== null) {
+            var parts = [];
+            if (item.time || item.timestamp) parts.push('[' + (item.time || item.timestamp) + ']');
+            if (item.point || item.title || item.category) parts.push(item.point || item.title || item.category);
+            if (item.quote || item.evidence) parts.push('引言：『' + (item.quote || item.evidence) + '』');
+            if (item.desc || item.detail || item.content) parts.push(item.desc || item.detail || item.content);
+            if (item.suggestion || item.action) parts.push('建議：' + (item.suggestion || item.action));
+            if (parts.length > 0) return (idx + 1) + '. ' + parts.join(' ');
+            return (idx + 1) + '. ' + JSON.stringify(item);
+          }
+          return String(item);
+        }).join('\n\n');
+      }
+      if (typeof val === 'object') {
+        var lines = [];
+        for (var k in val) {
+          if (val.hasOwnProperty(k)) {
+            lines.push(k + '：' + (typeof val[k] === 'object' ? JSON.stringify(val[k]) : val[k]));
+          }
+        }
+        return lines.join('\n');
+      }
+      return String(val);
     }
 
     function showToast(msg, type) {
@@ -1328,14 +1359,14 @@
           "【絕對嚴格之證據檢驗規準 (Evidence-First Guardrails)】：\n" +
           "1. 每一項「教學優點與亮點」和「待改進之處」，【必須】具備真實時間標籤（如 [00:10]）以及【錄音中教師或學生的真實對話引言】（以『』引號標註）！\n" +
           "2. 嚴禁任何無中生有、空泛無物的讚美或批評！\n" +
-          "3. 請以標準 JSON 格式輸出，欄位定義如下：\n" +
+          "3. 請以標準 JSON 格式輸出，欄位內容請一律以「換行文字字串（Plain String）」條列呈現，嚴禁輸出巢狀物件：\n" +
           "{\n" +
           "  \"scopeLabel\": \"分析範疇標籤\",\n" +
           "  \"confidence\": \"HIGH 或 MEDIUM\",\n" +
           "  \"speechClarity\": \"良好 / 一般\",\n" +
-          "  \"strengths\": \"優點與亮點\",\n" +
-          "  \"growth\": \"待改進之處\",\n" +
-          "  \"suggestions\": \"精進建議\"\n" +
+          "  \"strengths\": \"1. [時間戳] ...\\n2. [時間戳] ...\",\n" +
+          "  \"growth\": \"1. [時間戳] ...\\n2. [時間戳] ...\",\n" +
+          "  \"suggestions\": \"1. 對應上述事實之具體建議...\\n2. 具體建議...\"\n" +
           "}";
 
         var contentsParts = [];
@@ -1380,9 +1411,11 @@
         appState.scopeLabel = parsed.scopeLabel || "課堂片段觀察";
         appState.aiConfidence = parsed.confidence || "HIGH (真實對話佐證)";
         appState.speechClarity = parsed.speechClarity || "語音清晰辨識";
-        appState.aiStrengths = parsed.strengths || "";
-        appState.aiGrowth = parsed.growth || "";
-        appState.aiSuggestions = parsed.suggestions || "";
+        
+        // 核心防護：透過 formatAiOutput 展平任何可能的物件結構，徹底杜絕 [object Object]
+        appState.aiStrengths = formatAiOutput(parsed.strengths);
+        appState.aiGrowth = formatAiOutput(parsed.growth);
+        appState.aiSuggestions = formatAiOutput(parsed.suggestions);
 
         document.getElementById('scopeLabelText').innerText = appState.scopeLabel;
         document.getElementById('scopeConfidenceText').innerText = appState.aiConfidence;
@@ -1668,88 +1701,24 @@
       });
     }
 
-    /**
-     * 精準修復：將容器安全置於畫面原點 (left: 0; top: 0)，確保 html2pdf 100% 完整擷取所有內容
-     */
-    function generatePdfBlob() {
-      return new Promise(function(resolve) {
-        if (!window.html2pdf) {
-          resolve(null);
-          return;
-        }
-
-        var edS = document.getElementById('editAiStrengths');
-        var edG = document.getElementById('editAiGrowth');
-        var edR = document.getElementById('editAiSuggestions');
-        if (edS && edS.value) appState.aiStrengths = edS.value;
-        if (edG && edG.value) appState.aiGrowth = edG.value;
-        if (edR && edR.value) appState.aiSuggestions = edR.value;
-
-        try {
-          var container = document.createElement('div');
-          container.id = 'daguanPdfRenderContainer';
-          container.style.position = 'absolute';
-          container.style.left = '0';
-          container.style.top = '0';
-          container.style.width = '794px';
-          container.style.backgroundColor = '#ffffff';
-          container.style.color = '#000000';
-          container.style.zIndex = '-99999';
-          container.style.pointerEvents = 'none';
-          container.innerHTML = buildStandardHtmlReport(false);
-          document.body.appendChild(container);
-
-          var opt = {
-            margin:       [8, 8, 8, 8],
-            filename:     getStandardNamingBase() + '-數位觀課記錄表.pdf',
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { 
-              scale: 2, 
-              useCORS: true, 
-              logging: false,
-              scrollX: 0,
-              scrollY: 0,
-              windowWidth: 794
-            },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-          };
-
-          // 給予 400ms 讓瀏覽器完成所有字型與 Base64 影像解碼渲染
-          setTimeout(function() {
-            html2pdf().set(opt).from(container).outputPdf('blob').then(function(pdfBlob) {
-              if (container.parentNode) document.body.removeChild(container);
-              resolve(pdfBlob);
-            }).catch(function(e) {
-              console.warn("html2pdf 編譯失敗:", e);
-              if (container.parentNode) document.body.removeChild(container);
-              resolve(null);
-            });
-          }, 400);
-
-        } catch (err) {
-          console.warn("generatePdfBlob 執行例外:", err);
-          resolve(null);
-        }
-      });
-    }
-
     function downloadPdfDocument() {
-      showToast("正在產生標準 PDF 紀錄表，請稍候...", "info");
-      generatePdfBlob().then(function(blob) {
-        if (blob && blob.size > 200) {
-          var filename = getStandardNamingBase() + '-數位觀課記錄表.pdf';
-          var url = URL.createObjectURL(blob);
-          var a = document.createElement('a');
-          a.href = url;
-          a.download = filename;
-          a.click();
-          URL.revokeObjectURL(url);
-          showToast("已下載標準 PDF 紀錄表！", "success");
-        } else {
-          printObservationReport();
-        }
-      });
+      showToast("正在準備 PDF 檔案，請稍候...", "info");
+      var edS = document.getElementById('editAiStrengths');
+      var edG = document.getElementById('editAiGrowth');
+      var edR = document.getElementById('editAiSuggestions');
+      if (edS && edS.value) appState.aiStrengths = edS.value;
+      if (edG && edG.value) appState.aiGrowth = edG.value;
+      if (edR && edR.value) appState.aiSuggestions = edR.value;
+
+      var area = document.getElementById('printArea');
+      if (area) {
+        area.innerHTML = buildStandardHtmlReport(false);
+        area.classList.remove('hidden');
+        window.print();
+        setTimeout(function() {
+          area.classList.add('hidden');
+        }, 1000);
+      }
     }
 
     function downloadWordDocument() {
@@ -1767,10 +1736,12 @@
     function printObservationReport() {
       var area = document.getElementById('printArea');
       if (area) {
-        area.innerHTML = buildStandardHtmlReport();
+        area.innerHTML = buildStandardHtmlReport(false);
         area.classList.remove('hidden');
         window.print();
-        area.classList.add('hidden');
+        setTimeout(function() {
+          area.classList.add('hidden');
+        }, 1000);
       }
     }
 
@@ -1787,24 +1758,22 @@
       if (resultBox) resultBox.classList.add('hidden');
 
       var wordBlob = buildWordBlob();
+      var htmlContent = buildStandardHtmlReport(false);
 
       return Promise.all([
         getReadyAudioBlob(),
-        generatePdfBlob()
+        blobToBase64(wordBlob)
       ]).then(function(resBlobs) {
         var audioBlob = resBlobs[0];
-        var pdfBlob = resBlobs[1];
+        var wordBase64 = resBlobs[1];
 
         return Promise.all([
-          blobToBase64(wordBlob),
-          pdfBlob ? blobToBase64(pdfBlob) : Promise.resolve(""),
+          Promise.resolve(wordBase64),
           (audioBlob && audioBlob.size > 0) ? blobToBase64(audioBlob) : Promise.resolve("")
         ]).then(function(results) {
-          var wordBase64 = results[0];
-          var pdfBase64 = results[1];
-          var audioBase64 = results[2];
+          var wordB64 = results[0];
+          var audioBase64 = results[1];
           var audioMime = (audioBlob && audioBlob.type) ? audioBlob.type : "audio/webm";
-
           var subfolderName = getStandardNamingBase();
 
           var payload = {
@@ -1827,8 +1796,8 @@
             },
             audioData: audioBase64,
             audioMime: audioMime,
-            docxData: wordBase64,
-            pdfData: pdfBase64
+            docxData: wordB64,
+            htmlContent: htmlContent
           };
 
           var targetUrl = appState.gasUrl || DEFAULT_GAS_WEB_APP_URL;
