@@ -6,6 +6,8 @@
   <title>新北市立大觀國民中學 數位觀課與課堂智慧紀錄分析系統</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- html2pdf.js 高解析 PDF 編譯引擎 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
     body {
@@ -24,9 +26,46 @@
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
       background: #94a3b8;
     }
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #printArea, #printArea * {
+        visibility: visible;
+      }
+      #printArea {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+      }
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased">
+
+  <!-- 緊急錄音救援橫幅 -->
+  <div id="rescueAudioBanner" class="hidden bg-emerald-700 text-white px-4 py-3 text-xs sm:text-sm font-bold shadow-md flex items-center justify-between z-50 sticky top-0">
+    <div class="flex items-center space-x-2">
+      <span class="text-lg">💾</span>
+      <span>偵測到本機存有未遺失的課堂錄音快取！</span>
+    </div>
+    <div class="flex items-center space-x-2">
+      <button id="btnDownloadRescuedAudio" class="px-3 py-1 bg-white text-emerald-800 hover:bg-emerald-50 rounded-lg text-xs font-bold shadow transition">
+        ⬇️ 立即下載救回錄音檔
+      </button>
+      <button id="btnCloseRescueBanner" class="text-white hover:text-emerald-200 ml-1 text-base">✕</button>
+    </div>
+  </div>
+
+  <!-- LINE / 內建瀏覽器警示橫幅 -->
+  <div id="inAppBrowserAlert" class="hidden bg-amber-500 text-slate-900 px-4 py-2.5 text-xs sm:text-sm font-bold shadow-md flex items-center justify-between z-50 sticky top-0">
+    <div class="flex items-center space-x-2">
+      <span class="text-base">⚠️</span>
+      <span>您正在 LINE 或社交 App 內開啟網頁，麥克風可能受限！請點右下角「<b>📤</b>」或「<b>...</b>」選擇「<b>在 Safari/Chrome 開啟</b>」以順暢錄音。</span>
+    </div>
+    <button id="btnCloseInAppAlert" class="text-slate-900 font-bold ml-2 text-base">✕</button>
+  </div>
 
   <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -38,8 +77,8 @@
           <h1 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">新北市立大觀國民中學</h1>
           <p class="text-xs text-slate-500 flex items-center space-x-1.5 flex-wrap">
             <span>數位觀課與課堂智慧紀錄分析系統</span>
-            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-cyan-50 text-cyan-800 border border-cyan-200 font-bold">
-              改版：2026/09/26 10:35 (完美修復 PDF 空白與後端雙軌生成機制)
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+              改版：2026/09/25 22:45 (保證 PDF 內容真實渲染與影像佐證完整入庫)
             </span>
           </p>
         </div>
@@ -53,6 +92,9 @@
         </button>
         <button id="btnNewObsTop" class="inline-flex items-center px-3 py-1.5 border border-slate-300 text-xs sm:text-sm font-medium rounded-lg text-slate-700 bg-white hover:bg-slate-50 shadow-sm transition">
           <span class="mr-1">➕</span> 下一次觀課
+        </button>
+        <button id="btnGasSettingsModal" class="hidden sm:inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-lg text-slate-600 bg-slate-100 hover:bg-slate-200 transition">
+          <span class="mr-1 text-emerald-600">●</span> 雲端連線
         </button>
       </div>
     </div>
@@ -69,9 +111,10 @@
     </div>
   </div>
 
+  <!-- 主內容容器 -->
   <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6">
 
-    <!-- 步驟 1 -->
+    <!-- 步驟 1：基本資訊填寫 -->
     <section id="step1Section" class="space-y-6">
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-slate-100 gap-2">
@@ -120,7 +163,7 @@
       </div>
     </section>
 
-    <!-- 步驟 2 -->
+    <!-- 步驟 2：觀課與同步錄音 -->
     <section id="step2Section" class="hidden space-y-6">
       <div id="recordingNoticeBar" class="hidden bg-amber-500 text-slate-900 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm shadow flex items-center justify-between animate-pulse">
         <div class="flex items-center space-x-2">
@@ -170,11 +213,12 @@
           <button type="button" class="quick-tag-btn px-2.5 py-1 bg-slate-100 hover:bg-cyan-50 text-slate-700 hover:text-cyan-700 rounded-lg text-xs transition border border-slate-200" data-tag="[簡報教學] ">簡報教學</button>
           <button type="button" class="quick-tag-btn px-2.5 py-1 bg-slate-100 hover:bg-cyan-50 text-slate-700 hover:text-cyan-700 rounded-lg text-xs transition border border-slate-200" data-tag="[板書說明] ">板書說明</button>
           <button type="button" class="quick-tag-btn px-2.5 py-1 bg-slate-100 hover:bg-cyan-50 text-slate-700 hover:text-cyan-700 rounded-lg text-xs transition border border-slate-200" data-tag="[學生發言] ">學生發言</button>
+          <button type="button" class="quick-tag-btn px-2.5 py-1 bg-slate-100 hover:bg-cyan-50 text-slate-700 hover:text-cyan-700 rounded-lg text-xs transition border border-slate-200" data-tag="[常規管理] ">常規管理</button>
         </div>
 
         <div class="flex space-x-2">
           <input type="text" id="recordInput" placeholder="在此輸入觀察到的具體教學行為或師生互動..." class="flex-1 px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-none">
-          <button id="btnOpenInAppCamera" type="button" title="現場即時拍照 (不中斷錄音)" class="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs sm:text-sm shadow transition flex items-center space-x-1 shrink-0">
+          <button id="btnOpenInAppCamera" type="button" title="現場即時拍照 (不中斷錄音)" class="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-xl text-xs sm:text-sm shadow transition flex items-center space-x-1 shrink-0">
             <span>📷</span>
             <span class="hidden sm:inline">課堂拍照</span>
           </button>
@@ -183,6 +227,7 @@
           </button>
         </div>
 
+        <!-- 已拍攝照片即時預覽條 -->
         <div id="photosPreviewStrip" class="hidden mt-3 p-3 bg-amber-50/60 rounded-xl border border-amber-200">
           <div class="flex items-center justify-between text-xs text-amber-900 font-bold mb-2">
             <span class="flex items-center space-x-1">
@@ -210,26 +255,30 @@
       </div>
     </section>
 
-    <!-- 步驟 3 -->
+    <!-- 步驟 3：AI 分析與編輯預覽 -->
     <section id="step3Section" class="hidden space-y-6">
+
+      <!-- AI 即時分析載入遮罩條 -->
       <div id="aiAnalyzingProgressBox" class="hidden bg-gradient-to-r from-cyan-900 to-slate-900 text-white rounded-2xl p-5 shadow-lg border border-cyan-700 animate-pulse">
         <div class="flex items-center space-x-3">
           <span class="text-2xl animate-spin">🌀</span>
           <div>
             <div id="aiProgressTitle" class="font-bold text-sm text-cyan-300">Google Gemini 正在深入聆聽課堂真實錄音...</div>
             <div id="aiProgressDesc" class="text-xs text-slate-300 mt-1">
-              正在辨識課堂人聲、檢驗師生具體對話，並依教育部與新北市觀課規準進行深度分析，請稍候約 10~25 秒...
+              正在辨識課堂人聲、檢驗師生具體對話，並依教育部與新北市觀課規準進行「證據優先 (Evidence-First)」深度分析，請稍候約 10~25 秒...
             </div>
           </div>
         </div>
       </div>
 
+      <!-- 未設定 API Key 警示與引導卡片 -->
       <div id="noApiKeyNoticeCard" class="hidden bg-amber-50 border-2 border-amber-300 rounded-2xl p-5 shadow-sm space-y-3">
         <div class="flex items-center space-x-2 text-amber-900 font-bold text-sm">
           <span>⚠️ 尚未設定 Google Gemini API 金鑰！</span>
         </div>
         <p class="text-xs text-amber-800 leading-relaxed">
-          目前尚未設定您的專屬 Gemini API Key。請點擊下方按鈕免費獲取並貼入金鑰，即可啟動<b>真正的課堂語音多模態分析</b>。
+          目前尚未設定您的專屬 Gemini API Key。若未連線真實 AI，系統將無法聆聽您剛剛錄製的音檔並分析真實課堂對話！
+          請點擊下方按鈕免費獲取並貼入金鑰，即可啟動<b>真正的課堂語音多模態分析</b>。
         </p>
         <button id="btnNoticeSetupKey" type="button" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow transition">
           🔑 立即輸入 Gemini API Key
@@ -263,13 +312,14 @@
             <div id="scopeClarityText" class="font-semibold text-slate-200 mt-0.5">--</div>
           </div>
         </div>
+        <div id="scopeLimitationsBox" class="mt-3 text-xs text-amber-300 bg-amber-950/40 p-2.5 rounded-lg border border-amber-800/40 hidden"></div>
       </div>
 
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 space-y-5">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-3 border-b border-slate-100 gap-2">
           <div>
             <h3 class="text-base font-bold text-slate-900">第三部分：課堂教學真實對話分析與預覽編輯</h3>
-            <p class="text-xs text-slate-500">以下內容由 Gemini 模型實際聆聽課堂錄音產出，您可直接在下方編輯框修訂與補充。</p>
+            <p class="text-xs text-slate-500">以下內容由 Gemini 模型實際聆聽課堂錄音、嚴格依真實對話佐證分析產出。您可直接在下方編輯框修訂與補充。</p>
           </div>
           <button id="btnReAnalyze" type="button" class="text-xs text-cyan-600 hover:text-cyan-800 bg-cyan-50 px-3 py-1.5 rounded-lg border border-cyan-200 font-bold flex items-center space-x-1">
             <span>🔄</span>
@@ -278,18 +328,28 @@
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-emerald-800 mb-1">一、課堂教學優點與亮點 (Strengths)</label>
+          <label class="block text-xs font-bold text-emerald-800 mb-1 flex items-center space-x-1">
+            <span>一、課堂教學優點與亮點 (Strengths，附真實時間碼與逐字引言)</span>
+          </label>
           <textarea id="editAiStrengths" rows="5" class="w-full p-3 text-xs sm:text-sm border border-emerald-200 rounded-xl bg-emerald-50/30 focus:ring-2 focus:ring-emerald-500 focus:outline-none"></textarea>
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-amber-800 mb-1">二、課堂待改進之處 (Weaknesses)</label>
+          <label class="block text-xs font-bold text-amber-800 mb-1 flex items-center space-x-1">
+            <span>二、課堂待改進之處 (Weaknesses，附真實對話落差事實)</span>
+          </label>
           <textarea id="editAiGrowth" rows="5" class="w-full p-3 text-xs sm:text-sm border border-amber-200 rounded-xl bg-amber-50/30 focus:ring-2 focus:ring-amber-500 focus:outline-none"></textarea>
         </div>
 
         <div>
-          <label class="block text-xs font-bold text-blue-800 mb-1">三、行動精進建議 (Recommendations)</label>
+          <label class="block text-xs font-bold text-blue-800 mb-1 flex items-center space-x-1">
+            <span>三、行動精進建議 (Recommendations，精準對應上述課堂事件)</span>
+          </label>
           <textarea id="editAiSuggestions" rows="5" class="w-full p-3 text-xs sm:text-sm border border-blue-200 rounded-xl bg-blue-50/30 focus:ring-2 focus:ring-blue-500 focus:outline-none"></textarea>
+        </div>
+
+        <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600">
+          <b>備註：</b>「第四部分 議課後心得與想法」將於產出之 Word/PDF 文件中保留充足空白欄位，供被觀課教師於會後手寫或打字填寫。
         </div>
 
         <div class="pt-4 border-t border-slate-100 flex justify-end space-x-3">
@@ -303,7 +363,7 @@
       </div>
     </section>
 
-    <!-- 步驟 4 -->
+    <!-- 步驟 4：匯出與雲端歸檔 -->
     <section id="step4Section" class="hidden space-y-6">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
@@ -313,15 +373,25 @@
               📄
             </div>
             <h3 class="text-base font-bold text-slate-900">匯出校本標準觀課紀錄表與音檔</h3>
-            <p class="text-xs text-slate-500 mt-1">內含學校標準抬頭、基本資料表格、時間質性紀錄、AI雙軌分析與雙師簽名欄。</p>
+            <p class="text-xs text-slate-500 mt-1">內含學校標準抬頭、基本資料表格、時間質性紀錄、AI雙軌分析、議課心得空白框與雙師簽名欄。</p>
+
+            <div class="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600">
+              預計檔名：<span id="exportDocName" class="font-mono text-cyan-800 font-semibold">1150924-黃雲清老師-8年2班-李小美老師-數位觀課記錄表</span>
+            </div>
           </div>
 
           <div class="space-y-2 pt-2">
-            <button id="btnDownloadAudioLocal" type="button" class="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow transition">
-              🎙️ 下載課堂錄音檔 (本機備份)
+            <button id="btnDownloadAudioLocal" type="button" class="w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow transition flex items-center justify-center space-x-2">
+              <span>🎙️ 下載課堂錄音檔 (本機備份)</span>
             </button>
-            <button id="btnDownloadWord" type="button" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-xs sm:text-sm shadow transition">
-              📝 下載 Word 紀錄表 (.doc)
+            <button id="btnDownloadPdf" type="button" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow transition flex items-center justify-center space-x-2">
+              <span>📄 下載標準 PDF 紀錄表 (手機最佳)</span>
+            </button>
+            <button id="btnDownloadWord" type="button" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-xs sm:text-sm shadow transition flex items-center justify-center space-x-2">
+              <span>📝 下載 Word 紀錄表 (.doc/.docx)</span>
+            </button>
+            <button id="btnPrintReport" type="button" class="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl text-xs transition">
+              🖨️ 手機整頁列印／另存為 PDF
             </button>
           </div>
         </div>
@@ -333,11 +403,12 @@
             </div>
             <h3 class="text-base font-bold text-slate-900">全自動雲端硬碟歸檔與試算表記錄</h3>
             <p class="text-xs text-slate-500 mt-1">
-              自動在母資料夾建立專屬子資料夾，同時上傳<b>錄音檔</b>、<b>Word 檔</b>、<b>自動生成 PDF 紀錄表</b>與<b>照片</b>。
+              自動在母資料夾「數位觀課紀錄資料庫」建立專屬子資料夾，同時上傳<b>課堂錄音檔</b>、<b>Word 檔</b>、<b>PDF 檔</b>，並將完整觀課紀錄登錄至<b>觀課總表試算表</b>。
             </p>
 
             <div class="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
-              <div class="text-slate-600">專屬子資料夾：<b id="cloudSubfolderName" class="text-slate-800">--</b></div>
+              <div class="text-slate-600">指定母資料夾：<code class="text-cyan-800 font-mono">1xLAmgsKMO32lweFjC39RCVBsfaM0xoQr</code></div>
+              <div class="text-slate-600">專屬子資料夾：<b id="cloudSubfolderName" class="text-slate-800">1150924-黃雲清老師-8年2班-李小美老師</b></div>
               <div id="audioStatusText" class="font-medium text-slate-700">錄音檔狀態：檢查中...</div>
               <audio id="audioPreviewPlayer" controls class="w-full mt-2 hidden"></audio>
             </div>
@@ -362,15 +433,15 @@
       </div>
 
       <div class="pt-4 flex justify-center">
-        <button id="btnNewObsBottom" type="button" class="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs sm:text-sm font-semibold shadow transition">
-          ➕ 觀課已完成，進行下一堂課
+        <button id="btnNewObsBottom" type="button" class="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs sm:text-sm font-semibold shadow transition flex items-center space-x-2">
+          <span>➕ 觀課已完成，進行下一堂課</span>
         </button>
       </div>
     </section>
 
   </main>
 
-  <!-- Gemini API Key 視窗 -->
+  <!-- Gemini API Key 設定視窗 -->
   <div id="geminiKeyModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-100">
       <div class="flex justify-between items-center pb-2 border-b border-slate-100">
@@ -382,10 +453,15 @@
       </div>
       <p class="text-xs text-slate-600 leading-relaxed">
         本系統直接使用 Google 官方 <b>Gemini 2.5 Flash 多模態模型</b> 進行課堂實際錄音理解。
+        金鑰僅儲存於您目前的瀏覽器本機中，安全可靠。
       </p>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">貼入您的 Gemini API Key</label>
         <input type="password" id="inputGeminiApiKey" placeholder="AIzaSy..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+        <div class="mt-1.5 flex justify-between items-center text-[11px]">
+          <span class="text-slate-400">尚未有金鑰？</span>
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-cyan-700 underline font-bold">點此免費獲取 Google API Key ↗</a>
+        </div>
       </div>
       <div class="flex justify-end space-x-2 pt-2">
         <button id="btnSaveGeminiKey" class="px-5 py-2.5 bg-cyan-700 hover:bg-cyan-800 text-white text-xs font-bold rounded-xl shadow transition">
@@ -395,32 +471,99 @@
     </div>
   </div>
 
-  <!-- 拍照視窗 -->
-  <div id="inAppCameraModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex flex-col items-center justify-center p-3">
+  <!-- 未同步防呆詢問視窗 -->
+  <div id="unsyncedConfirmModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border border-slate-100">
+      <div class="flex items-center space-x-2.5 text-amber-600">
+        <span class="text-2xl">⚠️</span>
+        <h3 class="text-base font-bold text-slate-900">觀課紀錄尚未同步至雲端硬碟！</h3>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed">
+        偵測到本次觀課產生的<b>錄音檔、Word 與 PDF 紀錄表</b>尚未同步至 Google 雲端硬碟母資料夾。
+        若直接開始下一堂課，前次資料將會被覆蓋！
+      </p>
+      <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 font-medium">
+        建議點擊下方<b>「自動同步並開始下一堂」</b>，系統將替您自動完成雲端歸檔後立即開新課程。
+      </div>
+      <div class="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-2">
+        <button id="btnModalDiscardAndNew" type="button" class="px-4 py-2 border border-slate-300 text-slate-600 hover:bg-slate-100 rounded-xl text-xs font-semibold transition">
+          放棄同步，直接下一堂
+        </button>
+        <button id="btnModalSyncAndNew" type="button" class="px-5 py-2.5 bg-cyan-700 hover:bg-cyan-800 text-white rounded-xl text-xs font-bold shadow transition flex items-center justify-center space-x-1">
+          <span>☁️ 自動同步並開始下一堂</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 內嵌即時拍照視窗 -->
+  <div id="inAppCameraModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex flex-col items-center justify-center p-3 sm:p-5">
     <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
       <div class="px-4 py-3 bg-slate-900 flex items-center justify-between border-b border-slate-800 text-white">
-        <span class="text-xs font-bold text-amber-400">📸 課堂現場拍照佐證</span>
+        <div class="flex items-center space-x-2 text-xs sm:text-sm font-bold text-amber-400">
+          <span>📸 課堂現場拍照佐證</span>
+          <span class="text-[11px] font-normal text-slate-400">（🎙️ 錄音持續運作中）</span>
+        </div>
         <button id="btnCloseCameraModal" class="text-slate-400 hover:text-white text-lg">✕</button>
       </div>
-      <div class="relative bg-black flex-1 flex items-center justify-center min-h-[260px] max-h-[420px]">
+
+      <div class="relative bg-black flex-1 flex items-center justify-center min-h-[260px] max-h-[420px] overflow-hidden">
         <video id="cameraVideoFeed" autoplay playsinline muted class="w-full h-full object-contain"></video>
         <canvas id="cameraCanvasBuffer" class="hidden"></canvas>
+        <div id="cameraLoadingSpinner" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/70 text-white text-xs space-y-2">
+          <span class="animate-spin text-2xl">📷</span>
+          <span>正在啟動鏡頭...</span>
+        </div>
       </div>
+
       <div class="p-4 bg-slate-900 space-y-3">
-        <input type="text" id="photoNoteInput" placeholder="輸入照片說明 (例：第3組討論海報)" class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white">
-        <div class="flex items-center justify-between">
-          <button id="btnSwitchCamera" type="button" class="px-3 py-2 bg-slate-800 text-slate-300 text-xs rounded-xl">🔄 切換鏡頭</button>
-          <button id="btnSnapPhoto" type="button" class="px-6 py-2.5 bg-amber-500 text-slate-950 font-bold rounded-2xl text-sm">🔘 按下快門</button>
-          <button id="btnCancelPhoto" type="button" class="px-3 py-2 text-slate-400 text-xs">取消</button>
+        <input type="text" id="photoNoteInput" placeholder="輸入此照片說明 (例：黑板板書、第3組海報討論成果...)" class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400">
+
+        <div class="flex items-center justify-between pt-1">
+          <button id="btnSwitchCamera" type="button" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl font-medium transition flex items-center space-x-1">
+            <span>🔄 切換前後鏡頭</span>
+          </button>
+          
+          <button id="btnSnapPhoto" type="button" class="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-2xl text-sm shadow-lg transition transform active:scale-95 flex items-center space-x-2">
+            <span class="text-lg">🔘</span>
+            <span>按下快門</span>
+          </button>
+          
+          <button id="btnCancelPhoto" type="button" class="px-3 py-2 text-slate-400 hover:text-white text-xs font-medium">
+            取消
+          </button>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- 照片放大檢視視窗 -->
   <div id="photoLightboxModal" class="hidden fixed inset-0 bg-slate-950/90 z-50 flex items-center justify-center p-4">
     <div class="relative max-w-2xl w-full flex flex-col items-center">
-      <img id="lightboxImage" src="" alt="放大圖" class="max-w-full max-h-[80vh] rounded-xl object-contain">
-      <button id="btnCloseLightbox" class="absolute -top-10 right-0 text-white text-2xl font-bold">✕</button>
+      <img id="lightboxImage" src="" alt="課堂佐證放大圖" class="max-w-full max-h-[80vh] rounded-xl shadow-2xl border border-slate-800 object-contain">
+      <div id="lightboxCaption" class="mt-3 text-xs sm:text-sm text-slate-200 text-center font-medium bg-slate-900/80 px-4 py-2 rounded-xl border border-slate-800"></div>
+      <button id="btnCloseLightbox" class="absolute -top-10 right-0 text-white hover:text-amber-400 text-2xl font-bold">✕</button>
+    </div>
+  </div>
+
+  <div id="printArea" class="hidden"></div>
+
+  <div id="gasSettingsModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+        <h3 class="text-base font-bold text-slate-900">Google Apps Script (GAS) 雲端連線資訊</h3>
+        <button id="btnCloseGasModalX" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+      </div>
+      <p class="text-xs text-slate-600 leading-relaxed">
+        本系統已內建預設 Google Apps Script Web App 連線網址，所有觀課記錄將自動歸檔至大觀國中指定的 Google 雲端硬碟母資料夾。
+      </p>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">GAS 部署網址 (URL)</label>
+        <input type="text" id="settingGasUrl" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono text-slate-700 bg-slate-50" readonly>
+      </div>
+      <div class="flex justify-end space-x-2 pt-2">
+        <button id="btnCloseGasModalBtn" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg">關閉</button>
+      </div>
     </div>
   </div>
 
@@ -451,7 +594,15 @@
       audioStream: null,
       recordedChunks: [],
       audioBlob: null,
+      audioDurationSeconds: 0,
       hasSyncedCloud: false,
+      isAiAnalyzing: false,
+      durationSource: 'none',
+      analysisScope: 'VERY_SHORT_CLIP',
+      scopeLabel: '等待分析',
+      aiConfidence: 'PENDING',
+      speechClarity: '檢驗中',
+      limitations: [],
       aiStrengths: '',
       aiGrowth: '',
       aiSuggestions: '',
@@ -460,7 +611,12 @@
 
     function escapeHtml(text) {
       if (!text) return '';
-      return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
     }
 
     function showToast(msg, type) {
@@ -472,10 +628,15 @@
       if (type === 'warning') bg = 'bg-amber-500 text-slate-900 font-bold';
       if (type === 'error') bg = 'bg-rose-600 text-white font-bold';
       if (type === 'info') bg = 'bg-cyan-700 text-white font-medium';
-      toast.className = bg + ' px-4 py-2.5 rounded-xl shadow-lg text-xs sm:text-sm pointer-events-auto';
-      toast.innerText = msg;
+
+      toast.className = bg + ' px-4 py-2.5 rounded-xl shadow-lg text-xs sm:text-sm transform transition duration-300 pointer-events-auto flex items-center space-x-2';
+      toast.innerHTML = '<span>' + escapeHtml(msg) + '</span>';
       container.appendChild(toast);
-      setTimeout(function() { toast.remove(); }, 3500);
+
+      setTimeout(function() {
+        toast.style.opacity = '0';
+        setTimeout(function() { toast.remove(); }, 300);
+      }, 3500);
     }
 
     function initIndexedDB() {
@@ -484,11 +645,18 @@
           var req = indexedDB.open('DaguanObsDB', 1);
           req.onupgradeneeded = function(e) {
             var db = e.target.result;
-            if (!db.objectStoreNames.contains('audioChunks')) db.createObjectStore('audioChunks', { autoIncrement: true });
+            if (!db.objectStoreNames.contains('audioChunks')) {
+              db.createObjectStore('audioChunks', { autoIncrement: true });
+            }
           };
-          req.onsuccess = function(e) { appState.idb = e.target.result; resolve(true); };
+          req.onsuccess = function(e) {
+            appState.idb = e.target.result;
+            resolve(true);
+          };
           req.onerror = function() { resolve(false); };
-        } catch (e) { resolve(false); }
+        } catch (err) {
+          resolve(false);
+        }
       });
     }
 
@@ -516,7 +684,9 @@
           var req = tx.objectStore('audioChunks').getAll();
           req.onsuccess = function() { resolve(req.result || []); };
           req.onerror = function() { resolve([]); };
-        } catch (e) { resolve([]); }
+        } catch (e) {
+          resolve([]);
+        }
       });
     }
 
@@ -530,7 +700,8 @@
         if (statusEl) {
           if (appState.geminiApiKey) {
             statusEl.innerText = 'AI Key 已就緒';
-            statusEl.parentElement.className = 'inline-flex items-center px-2.5 py-1.5 border border-emerald-300 text-xs sm:text-sm font-bold rounded-lg text-emerald-800 bg-emerald-50';
+            statusEl.parentElement.classList.remove('bg-cyan-50', 'text-cyan-800', 'border-cyan-300');
+            statusEl.parentElement.classList.add('bg-emerald-50', 'text-emerald-800', 'border-emerald-300');
           } else {
             statusEl.innerText = '設定 AI Key';
           }
@@ -542,28 +713,39 @@
       var input = document.getElementById('inputGeminiApiKey');
       if (!input) return;
       var val = input.value.trim();
-      if (!val) { showToast("請輸入有效金鑰", "warning"); return; }
+      if (!val) {
+        showToast("請輸入有效金鑰或點右下角關閉", "warning");
+        return;
+      }
       appState.geminiApiKey = val;
       localStorage.setItem('daguan_gemini_api_key', val);
       loadSavedGeminiApiKey();
       document.getElementById('geminiKeyModal').classList.add('hidden');
-      document.getElementById('noApiKeyNoticeCard').classList.add('hidden');
+      var noticeCard = document.getElementById('noApiKeyNoticeCard');
+      if (noticeCard) noticeCard.classList.add('hidden');
       showToast("🎉 Gemini API 金鑰已儲存！", "success");
-      if (appState.currentStep === 3) runRealGeminiAiAnalysis();
+
+      if (appState.currentStep === 3) {
+        runRealGeminiAiAnalysis();
+      }
     }
 
     function autoSaveStateToLocalStorage() {
       try {
         var backup = {
-          obsDate: document.getElementById('obsDate') ? document.getElementById('obsDate').value : '',
-          teacherName: document.getElementById('teacherName') ? document.getElementById('teacherName').value : '',
-          observerName: document.getElementById('observerName') ? document.getElementById('observerName').value : '',
-          subjectName: document.getElementById('subjectName') ? document.getElementById('subjectName').value : '',
-          unitName: document.getElementById('unitName') ? document.getElementById('unitName').value : '',
-          className: document.getElementById('className') ? document.getElementById('className').value : '',
+          obsDate: document.getElementById('obsDate') ? document.getElementById('obsDate').value : appState.obsDate,
+          teacherName: document.getElementById('teacherName') ? document.getElementById('teacherName').value : appState.teacherName,
+          observerName: document.getElementById('observerName') ? document.getElementById('observerName').value : appState.observerName,
+          subjectName: document.getElementById('subjectName') ? document.getElementById('subjectName').value : appState.subjectName,
+          unitName: document.getElementById('unitName') ? document.getElementById('unitName').value : appState.unitName,
+          className: document.getElementById('className') ? document.getElementById('className').value : appState.className,
+          elapsedSeconds: appState.elapsedSeconds,
           records: appState.records,
           photos: appState.photos,
-          currentStep: appState.currentStep
+          currentStep: appState.currentStep,
+          aiStrengths: appState.aiStrengths,
+          aiGrowth: appState.aiGrowth,
+          aiSuggestions: appState.aiSuggestions
         };
         localStorage.setItem('daguan_obs_autosave', JSON.stringify(backup));
       } catch (e) {}
@@ -574,15 +756,18 @@
         var raw = localStorage.getItem('daguan_obs_autosave');
         if (!raw) return;
         var b = JSON.parse(raw);
-        if (b.teacherName && document.getElementById('teacherName')) {
-          document.getElementById('teacherName').value = b.teacherName;
-          if (b.obsDate) document.getElementById('obsDate').value = b.obsDate;
-          if (b.observerName) document.getElementById('observerName').value = b.observerName;
-          if (b.subjectName) document.getElementById('subjectName').value = b.subjectName;
-          if (b.unitName) document.getElementById('unitName').value = b.unitName;
-          if (b.className) document.getElementById('className').value = b.className;
+        if (b.teacherName && document.getElementById('teacherName') && !document.getElementById('teacherName').value) {
+          document.getElementById('teacherName').value = b.teacherName || '';
+          if (b.obsDate && document.getElementById('obsDate')) document.getElementById('obsDate').value = b.obsDate;
+          if (b.observerName && document.getElementById('observerName')) document.getElementById('observerName').value = b.observerName;
+          if (b.subjectName && document.getElementById('subjectName')) document.getElementById('subjectName').value = b.subjectName;
+          if (b.unitName && document.getElementById('unitName')) document.getElementById('unitName').value = b.unitName;
+          if (b.className && document.getElementById('className')) document.getElementById('className').value = b.className;
           if (Array.isArray(b.records)) appState.records = b.records;
           if (Array.isArray(b.photos)) appState.photos = b.photos;
+          if (b.aiStrengths) appState.aiStrengths = b.aiStrengths;
+          if (b.aiGrowth) appState.aiGrowth = b.aiGrowth;
+          if (b.aiSuggestions) appState.aiSuggestions = b.aiSuggestions;
         }
       } catch (e) {}
     }
@@ -595,33 +780,57 @@
         var mm = String(now.getMonth() + 1).padStart(2, '0');
         var dd = String(now.getDate()).padStart(2, '0');
         input.value = rocYear + mm + dd;
+        appState.obsDate = input.value;
       }
     }
 
     function formatTimeMmSs(sec) {
-      return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+      var m = Math.floor(sec / 60);
+      var s = sec % 60;
+      return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+
+    function formatCurrentTimestamp() {
+      return formatTimeMmSs(appState.elapsedSeconds);
     }
 
     function fillMockTestData() {
       initDefaultDate();
-      document.getElementById('teacherName').value = '黃雲清老師';
-      document.getElementById('observerName').value = '李小美老師';
-      document.getElementById('subjectName').value = '理化';
-      document.getElementById('unitName').value = '2-1 物質的變化';
-      document.getElementById('className').value = '8年2班';
+      var defTeacher = document.getElementById('teacherName');
+      var defObserver = document.getElementById('observerName');
+      var defSubject = document.getElementById('subjectName');
+      var defUnit = document.getElementById('unitName');
+      var defClass = document.getElementById('className');
+
+      if (defTeacher) defTeacher.value = '黃雲清老師';
+      if (defObserver) defObserver.value = '李小美老師';
+      if (defSubject) defSubject.value = '理化';
+      if (defUnit) defUnit.value = '2-1 物質的變化';
+      if (defClass) defClass.value = '8年2班';
+
       showToast("已帶入示範觀課測試資料！", "success");
     }
 
-    function goToStep(step) {
-      appState.currentStep = step;
+    function goToStep(stepNumber) {
+      appState.currentStep = stepNumber;
       for (var i = 1; i <= 4; i++) {
         var sec = document.getElementById('step' + i + 'Section');
         var tab = document.getElementById('stepTab' + i);
-        if (sec) sec.className = (i === step) ? 'space-y-6' : 'hidden space-y-6';
+        if (sec) {
+          if (i === stepNumber) {
+            sec.classList.remove('hidden');
+          } else {
+            sec.classList.add('hidden');
+          }
+        }
         if (tab) {
-          if (i === step) tab.className = 'py-2 rounded-lg bg-cyan-700 text-white font-bold shadow-sm transition cursor-pointer';
-          else if (i < step) tab.className = 'py-2 rounded-lg text-cyan-800 bg-cyan-50 font-medium transition cursor-pointer';
-          else tab.className = 'py-2 rounded-lg text-slate-400 bg-slate-50 transition cursor-pointer';
+          if (i === stepNumber) {
+            tab.className = 'py-2 rounded-lg bg-cyan-700 text-white font-bold shadow-sm transition cursor-pointer';
+          } else if (i < stepNumber) {
+            tab.className = 'py-2 rounded-lg text-cyan-800 bg-cyan-50 font-medium transition cursor-pointer';
+          } else {
+            tab.className = 'py-2 rounded-lg text-slate-400 bg-slate-50 transition cursor-pointer';
+          }
         }
       }
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -656,23 +865,57 @@
       if (!appState.timerInterval) {
         appState.timerInterval = setInterval(function() {
           appState.elapsedSeconds++;
-          document.getElementById('observationTimerDisplay').innerText = formatTimeMmSs(appState.elapsedSeconds);
+          var display = document.getElementById('observationTimerDisplay');
+          if (display) display.innerText = formatCurrentTimestamp();
         }, 1000);
       }
 
       goToStep(2);
       renderPhotosPreviewStrip();
       autoSaveStateToLocalStorage();
-      if (!appState.isRecording) startAudioRecording();
+
+      if (!appState.isRecording) {
+        startAudioRecording();
+      }
+    }
+
+    function getSupportedMimeType() {
+      var types = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+        'audio/aac',
+        'audio/ogg;codecs=opus'
+      ];
+      for (var i = 0; i < types.length; i++) {
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported(types[i])) {
+          return types[i];
+        }
+      }
+      return '';
     }
 
     function startAudioRecording() {
       if (appState.isRecording) return;
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+
+      var constraints = {
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      };
+
+      navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
         appState.audioStream = stream;
+        var mimeType = getSupportedMimeType();
+        var options = { audioBitsPerSecond: 32000 };
+        if (mimeType) options.mimeType = mimeType;
+
         appState.recordedChunks = [];
         try {
-          appState.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+          appState.mediaRecorder = new MediaRecorder(stream, options);
         } catch (e) {
           appState.mediaRecorder = new MediaRecorder(stream);
         }
@@ -685,40 +928,73 @@
         };
 
         appState.mediaRecorder.onstop = function() {
-          appState.audioBlob = new Blob(appState.recordedChunks, { type: 'audio/webm' });
+          var finalMime = (appState.recordedChunks[0] && appState.recordedChunks[0].type) ? appState.recordedChunks[0].type : (mimeType || 'audio/webm');
+          appState.audioBlob = new Blob(appState.recordedChunks, { type: finalMime });
           updateAudioStatusInStep4();
         };
 
         appState.mediaRecorder.start(5000);
         appState.isRecording = true;
-        document.getElementById('recordingIndicatorDot').classList.remove('hidden');
-        document.getElementById('recordingBtnText').innerText = '🔴 錄音中 (點擊暫停)';
-        document.getElementById('recordingNoticeBar').classList.add('hidden');
-        showToast("🎙️ 課堂錄音已自動啟動！", "success");
+        updateRecordingUI(true);
+        showToast("🎙️ 課堂錄音已啟動！", "success");
       }).catch(function(err) {
-        document.getElementById('recordingNoticeBar').classList.remove('hidden');
-        showToast("麥克風啟動受限，請點擊頂部橫幅開啟", "warning");
+        console.warn("麥克風啟動失敗:", err);
+        updateRecordingUI(false);
+        var noticeBar = document.getElementById('recordingNoticeBar');
+        if (noticeBar) noticeBar.classList.remove('hidden');
+        showToast("無法開啟麥克風，請檢查瀏覽器設定！", "warning");
       });
     }
 
     function stopAudioRecording() {
       if (!appState.isRecording) return;
       if (appState.mediaRecorder && appState.mediaRecorder.state !== 'inactive') {
-        try { appState.mediaRecorder.requestData(); } catch (e) {}
+        try {
+          appState.mediaRecorder.requestData();
+        } catch (e) {}
         appState.mediaRecorder.stop();
       }
       if (appState.audioStream) {
-        appState.audioStream.getTracks().forEach(function(t) { t.stop(); });
+        appState.audioStream.getTracks().forEach(function(track) { track.stop(); });
         appState.audioStream = null;
       }
       appState.isRecording = false;
-      document.getElementById('recordingIndicatorDot').classList.add('hidden');
-      document.getElementById('recordingBtnText').innerText = '啟動課堂錄音';
+      updateRecordingUI(false);
     }
 
     function toggleAudioRecording() {
-      if (appState.isRecording) { stopAudioRecording(); showToast("已暫停錄音", "info"); }
-      else { startAudioRecording(); }
+      if (appState.isRecording) {
+        stopAudioRecording();
+        showToast("已暫停課堂錄音", "info");
+      } else {
+        startAudioRecording();
+      }
+    }
+
+    function updateRecordingUI(recording) {
+      var btn = document.getElementById('audioRecordBtn');
+      var dot = document.getElementById('recordingIndicatorDot');
+      var txt = document.getElementById('recordingBtnText');
+      var noticeBar = document.getElementById('recordingNoticeBar');
+
+      if (!btn) return;
+      if (recording) {
+        btn.className = 'px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow transition flex items-center space-x-2';
+        if (dot) dot.classList.remove('hidden');
+        if (txt) txt.innerText = '🔴 課堂錄音中 (點擊暫停)';
+        if (noticeBar) noticeBar.classList.add('hidden');
+      } else {
+        btn.className = 'px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow transition flex items-center space-x-2';
+        if (dot) dot.classList.add('hidden');
+        if (txt) txt.innerText = '啟動課堂錄音';
+      }
+    }
+
+    function insertTag(tag) {
+      var input = document.getElementById('recordInput');
+      if (!input) return;
+      input.value = tag + input.value;
+      input.focus();
     }
 
     function addCurrentRecord() {
@@ -726,9 +1002,23 @@
       if (!input) return;
       var text = input.value.trim();
       if (!text) return;
-      var ts = formatTimeMmSs(appState.elapsedSeconds);
-      appState.records.push({ id: Date.now(), timestamp: ts, text: text });
+
+      var currentTs = formatCurrentTimestamp();
+      var item = {
+        id: Date.now(),
+        timestamp: currentTs,
+        text: text
+      };
+
+      appState.records.push(item);
       input.value = '';
+      renderRecordsList();
+      autoSaveStateToLocalStorage();
+      showToast("已記錄 [" + currentTs + "]", "info");
+    }
+
+    function deleteRecord(id) {
+      appState.records = appState.records.filter(function(r) { return r.id !== id; });
       renderRecordsList();
       autoSaveStateToLocalStorage();
     }
@@ -736,240 +1026,797 @@
     function renderRecordsList() {
       var container = document.getElementById('recordsListContainer');
       if (!container) return;
+
       if (appState.records.length === 0) {
-        container.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">尚未新增質性紀錄。隨時輸入文字按 Enter 即可記錄！</div>';
+        container.innerHTML = '<div id="recordsEmptyNotice" class="p-6 text-center text-xs text-slate-400">尚未新增質性紀錄。觀課進行中，隨時輸入文字按 Enter 即可記錄課堂時點！</div>';
         return;
       }
+
       container.innerHTML = appState.records.slice().reverse().map(function(r) {
-        return '<div class="p-3 hover:bg-white flex items-center justify-between text-xs sm:text-sm">' +
-          '<div class="flex items-center space-x-2"><span class="font-mono font-bold text-cyan-800 bg-cyan-50 px-2 py-0.5 rounded">' + escapeHtml(r.timestamp) + '</span><span>' + escapeHtml(r.text) + '</span></div>' +
-          '<button onclick="window.deleteRecord(' + r.id + ')" class="text-slate-300 hover:text-rose-600">✕</button></div>';
+        return '<div class="p-3 hover:bg-white flex items-start justify-between group transition">' +
+          '<div class="flex items-start space-x-2.5 text-xs sm:text-sm">' +
+          '<span class="font-mono font-bold text-cyan-800 bg-cyan-50 px-2 py-0.5 rounded border border-cyan-200">' + escapeHtml(r.timestamp) + '</span>' +
+          '<span class="text-slate-800 leading-relaxed">' + escapeHtml(r.text) + '</span>' +
+          '</div>' +
+          '<button onclick="window.deleteRecord(' + r.id + ')" class="text-slate-300 hover:text-rose-600 text-xs px-1 transition opacity-0 group-hover:opacity-100">✕</button>' +
+          '</div>';
       }).join('');
     }
 
-    window.deleteRecord = function(id) {
-      appState.records = appState.records.filter(function(r) { return r.id !== id; });
-      renderRecordsList();
-    };
+    window.deleteRecord = deleteRecord;
 
     function openInAppCamera() {
       var modal = document.getElementById('inAppCameraModal');
-      modal.classList.remove('hidden');
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: appState.currentFacingMode } } }).then(function(stream) {
-        appState.cameraStream = stream;
-        document.getElementById('cameraVideoFeed').srcObject = stream;
-      }).catch(function() {
-        navigator.mediaDevices.getUserMedia({ video: true }).then(function(stream) {
-          appState.cameraStream = stream;
-          document.getElementById('cameraVideoFeed').srcObject = stream;
-        });
-      });
+      var spinner = document.getElementById('cameraLoadingSpinner');
+      var noteInput = document.getElementById('photoNoteInput');
+      if (noteInput) noteInput.value = '';
+      if (modal) modal.classList.remove('hidden');
+      if (spinner) spinner.classList.remove('hidden');
+
+      startCameraStream();
     }
 
     function closeInAppCamera() {
-      if (appState.cameraStream) appState.cameraStream.getTracks().forEach(function(t) { t.stop(); });
-      document.getElementById('inAppCameraModal').classList.add('hidden');
+      stopCameraStream();
+      var modal = document.getElementById('inAppCameraModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function startCameraStream() {
+      stopCameraStream();
+      var video = document.getElementById('cameraVideoFeed');
+      var spinner = document.getElementById('cameraLoadingSpinner');
+
+      var constraints = {
+        video: {
+          facingMode: { ideal: appState.currentFacingMode },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      };
+
+      navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
+        appState.cameraStream = stream;
+        if (video) {
+          video.srcObject = stream;
+          video.onloadedmetadata = function() {
+            video.play();
+            if (spinner) spinner.classList.add('hidden');
+          };
+        }
+      }).catch(function() {
+        return navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(function(stream) {
+          appState.cameraStream = stream;
+          if (video) {
+            video.srcObject = stream;
+            video.onloadedmetadata = function() {
+              video.play();
+              if (spinner) spinner.classList.add('hidden');
+            };
+          }
+        });
+      }).catch(function(err) {
+        console.error("相機無法開啟:", err);
+        if (spinner) spinner.classList.add('hidden');
+        showToast("相機啟動受限：" + err.name + "，請確認鏡頭權限！", "error");
+        closeInAppCamera();
+      });
+    }
+
+    function stopCameraStream() {
+      if (appState.cameraStream) {
+        appState.cameraStream.getTracks().forEach(function(track) { track.stop(); });
+        appState.cameraStream = null;
+      }
+      var video = document.getElementById('cameraVideoFeed');
+      if (video) video.srcObject = null;
+    }
+
+    function switchCameraFacing() {
+      appState.currentFacingMode = (appState.currentFacingMode === 'environment') ? 'user' : 'environment';
+      startCameraStream();
     }
 
     function snapPhotoNow() {
       var video = document.getElementById('cameraVideoFeed');
       var canvas = document.getElementById('cameraCanvasBuffer');
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      canvas.getContext('2d').drawImage(video, 0, 0);
-      var b64 = canvas.toDataURL('image/jpeg', 0.8);
-      var ts = formatTimeMmSs(appState.elapsedSeconds);
-      var note = document.getElementById('photoNoteInput').value.trim() || '實況拍照';
+      if (!video || !video.videoWidth) {
+        showToast("相機畫面尚未就緒，請稍候再按快門！", "warning");
+        return;
+      }
 
-      appState.photos.push({ id: Date.now(), timestamp: ts, note: note, base64: b64 });
-      appState.records.push({ id: Date.now() + 1, timestamp: ts, text: "📷 [照片佐證] " + note });
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      var base64Data = canvas.toDataURL('image/jpeg', 0.82);
+      var currentTs = formatCurrentTimestamp();
+      var note = document.getElementById('photoNoteInput') ? document.getElementById('photoNoteInput').value.trim() : '';
+      var photoTitle = note || "課堂實況拍照";
+
+      var photoItem = {
+        id: Date.now(),
+        timestamp: currentTs,
+        note: photoTitle,
+        base64: base64Data
+      };
+
+      appState.photos.push(photoItem);
+
+      var recordItem = {
+        id: Date.now() + 1,
+        timestamp: currentTs,
+        text: "📷 [照片佐證] " + photoTitle,
+        photoId: photoItem.id
+      };
+      appState.records.push(recordItem);
+
       renderRecordsList();
       renderPhotosPreviewStrip();
+      autoSaveStateToLocalStorage();
+
       closeInAppCamera();
-      showToast("📸 照片已記錄 [" + ts + "]", "success");
+      showToast("📸 照片已記錄 [" + currentTs + "]，錄音無中斷持續進行！", "success");
     }
 
     function renderPhotosPreviewStrip() {
       var strip = document.getElementById('photosPreviewStrip');
       var list = document.getElementById('photosThumbnailList');
-      if (appState.photos.length === 0) { strip.classList.add('hidden'); return; }
+      var countBadge = document.getElementById('photoBadgeCount');
+
+      if (!strip || !list) return;
+
+      if (appState.photos.length === 0) {
+        strip.classList.add('hidden');
+        return;
+      }
+
       strip.classList.remove('hidden');
-      document.getElementById('photoBadgeCount').innerText = appState.photos.length;
+      if (countBadge) countBadge.innerText = appState.photos.length;
+
       list.innerHTML = appState.photos.map(function(p) {
-        return '<div class="relative w-20 h-20 bg-slate-900 rounded-lg overflow-hidden border border-amber-300 shrink-0 cursor-pointer" onclick="window.viewPhoto(' + p.id + ')">' +
+        return '<div class="relative group shrink-0 w-20 h-20 bg-slate-900 rounded-lg overflow-hidden border border-amber-300 shadow cursor-pointer" onclick="window.viewPhotoLightbox(' + p.id + ')">' +
           '<img src="' + p.base64 + '" class="w-full h-full object-cover">' +
-          '<span class="absolute bottom-0 inset-x-0 bg-black/70 text-[9px] text-white text-center truncate">' + escapeHtml(p.timestamp) + '</span></div>';
+          '<div class="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[10px] text-amber-200 px-1 py-0.5 truncate text-center">' + escapeHtml(p.timestamp) + '</div>' +
+          '<button onclick="event.stopPropagation(); window.deletePhoto(' + p.id + ')" class="absolute top-0.5 right-0.5 bg-rose-600/90 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow hover:bg-rose-700 transition">✕</button>' +
+          '</div>';
       }).join('');
     }
 
-    window.viewPhoto = function(id) {
-      var p = appState.photos.find(function(item) { return item.id === id; });
-      if (!p) return;
-      document.getElementById('lightboxImage').src = p.base64;
-      document.getElementById('photoLightboxModal').classList.remove('hidden');
-    };
+    function viewPhotoLightbox(id) {
+      var photo = appState.photos.find(function(p) { return p.id === id; });
+      if (!photo) return;
+      var modal = document.getElementById('photoLightboxModal');
+      var img = document.getElementById('lightboxImage');
+      var caption = document.getElementById('lightboxCaption');
+
+      if (img) img.src = photo.base64;
+      if (caption) caption.innerText = "[" + photo.timestamp + "] " + photo.note;
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function deletePhoto(id) {
+      appState.photos = appState.photos.filter(function(p) { return p.id !== id; });
+      renderPhotosPreviewStrip();
+      showToast("已刪除該張照片", "info");
+    }
+
+    window.viewPhotoLightbox = viewPhotoLightbox;
+    window.deletePhoto = deletePhoto;
 
     function finishObservationAndProceed() {
       stopAudioRecording();
-      if (appState.timerInterval) { clearInterval(appState.timerInterval); appState.timerInterval = null; }
+      if (appState.timerInterval) {
+        clearInterval(appState.timerInterval);
+        appState.timerInterval = null;
+      }
       appState.isObserving = false;
       goToStep(3);
       runRealGeminiAiAnalysis();
     }
 
-    function runRealGeminiAiAnalysis() {
-      var dur = formatTimeMmSs(appState.elapsedSeconds);
-      document.getElementById('scopeAudioDurationText').innerText = dur;
-      if (!appState.geminiApiKey) {
-        document.getElementById('noApiKeyNoticeCard').classList.remove('hidden');
-        return;
-      }
-      document.getElementById('aiAnalyzingProgressBox').classList.remove('hidden');
+    function delayMs(ms) {
+      return new Promise(function(resolve) { setTimeout(resolve, ms); });
+    }
 
-      getReadyAudioBlob().then(function(blob) {
-        return blob ? blobToBase64(blob) : Promise.resolve("");
-      }).then(function(b64) {
-        var cleanB64 = b64.replace(/^data:[^;]+;base64,/, '').replace(/\s/g, '');
-        var prompt = "請根據課堂真實錄音與記錄，以台灣教育部公開授課規準，輸出 JSON：\n" +
-          "{\"scopeLabel\":\"完整課堂觀察\",\"confidence\":\"HIGH\",\"speechClarity\":\"清晰\",\"strengths\":\"1. [...]\":\"growth\":\"1. [...]\":\"suggestions\":\"1. [...]\"}";
+    function callGeminiWithFallbackAndRetry(reqBody, apiKey, onStatusUpdate) {
+      var candidateModels = [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-3-flash-preview"
+      ];
 
-        var parts = [];
-        if (cleanB64.length > 50) {
-          parts.push({ inlineData: { mimeType: "audio/webm", data: cleanB64 } });
+      function tryModel(modelIndex, attempt) {
+        if (modelIndex >= candidateModels.length) {
+          return Promise.reject(new Error("所有 AI 模型引擎目前皆處於高負載尖峰，請稍候 30 秒再點擊「重新進行 Gemini 語音分析」。"));
         }
-        parts.push({ text: prompt });
 
-        return fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + appState.geminiApiKey, {
+        var modelName = candidateModels[modelIndex];
+        var apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent?key=" + apiKey;
+
+        return fetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: parts }], generationConfig: { responseMimeType: "application/json" } })
-        });
-      }).then(function(r) { return r.json(); }).then(function(res) {
-        var jsonText = res.candidates[0].content.parts[0].text;
-        var data = JSON.parse(jsonText);
-        appState.aiStrengths = data.strengths || "1. 課堂互動良好。";
-        appState.aiGrowth = data.growth || "1. 可增加思考等候時間。";
-        appState.aiSuggestions = data.suggestions || "1. 善用追問技巧。";
+          body: JSON.stringify(reqBody)
+        }).then(function(response) {
+          if (response.ok) {
+            return response.json();
+          }
 
-        document.getElementById('editAiStrengths').value = appState.aiStrengths;
-        document.getElementById('editAiGrowth').value = appState.aiGrowth;
-        document.getElementById('editAiSuggestions').value = appState.aiSuggestions;
-        document.getElementById('aiScopeBadge').innerText = "✅ AI 分析完成";
-        showToast("🎉 AI 分析完成！", "success");
+          return response.json().then(function(errData) {
+            var errMsg = (errData && errData.error && errData.error.message) ? errData.error.message : ("HTTP " + response.status);
+            var isHighDemand = (response.status === 503 || response.status === 429 || errMsg.indexOf("high demand") !== -1 || errMsg.indexOf("overloaded") !== -1 || errMsg.indexOf("quota") !== -1);
+
+            if (isHighDemand && attempt < 2) {
+              var waitTime = (attempt + 1) * 1800;
+              if (onStatusUpdate) onStatusUpdate("遭遇伺服器尖峰，正在自動第 " + (attempt + 1) + " 次重試 (" + modelName + ")...");
+              return delayMs(waitTime).then(function() {
+                return tryModel(modelIndex, attempt + 1);
+              });
+            }
+
+            if (isHighDemand && modelIndex + 1 < candidateModels.length) {
+              var nextModel = candidateModels[modelIndex + 1];
+              if (onStatusUpdate) onStatusUpdate("正在切換至穩定備援引擎 (" + nextModel + ")...");
+              return delayMs(1000).then(function() {
+                return tryModel(modelIndex + 1, 0);
+              });
+            }
+
+            throw new Error(errMsg);
+          });
+        });
+      }
+
+      return tryModel(0, 0);
+    }
+
+    function runRealGeminiAiAnalysis() {
+      var dur = appState.elapsedSeconds;
+      var durationText = formatTimeMmSs(dur);
+      document.getElementById('scopeAudioDurationText').innerText = durationText;
+
+      var noticeCard = document.getElementById('noApiKeyNoticeCard');
+      var progressBox = document.getElementById('aiAnalyzingProgressBox');
+      var progressTitle = document.getElementById('aiProgressTitle');
+      var progressDesc = document.getElementById('aiProgressDesc');
+
+      if (!appState.geminiApiKey) {
+        if (noticeCard) noticeCard.classList.remove('hidden');
+        if (progressBox) progressBox.classList.add('hidden');
+        showToast("⚠️ 請先設定 Gemini API Key，以啟動真實現聽語音分析！", "warning");
+        return;
+      }
+
+      if (noticeCard) noticeCard.classList.add('hidden');
+      if (progressBox) progressBox.classList.remove('hidden');
+      if (progressTitle) progressTitle.innerText = "Google Gemini 正在深入聆聽課堂真實錄音...";
+      if (progressDesc) progressDesc.innerText = "正在辨識課堂人聲、檢驗師生具體對話，並依教育部與新北市觀課規準進行「證據優先 (Evidence-First)」深度分析，請稍候約 10~25 秒...";
+      appState.isAiAnalyzing = true;
+
+      getReadyAudioBlob().then(function(audioBlob) {
+        return Promise.all([
+          (audioBlob && audioBlob.size > 0) ? blobToBase64(audioBlob) : Promise.resolve(""),
+          Promise.resolve(audioBlob ? audioBlob.type : "audio/webm")
+        ]);
+      }).then(function(res) {
+        var base64Audio = res[0];
+        var audioMime = res[1];
+
+        var cleanAudioB64 = base64Audio;
+        var commaIdx = cleanAudioB64.indexOf(",");
+        if (commaIdx !== -1) {
+          cleanAudioB64 = cleanAudioB64.substring(commaIdx + 1);
+        }
+        cleanAudioB64 = cleanAudioB64.replace(/\s/g, '');
+
+        var recordsSummary = appState.records.map(function(r) {
+          return "[" + r.timestamp + "] " + r.text;
+        }).join("\n");
+
+        var promptText = "你是一位精通臺灣教育部與新北市公開授課規準的資深國中教學輔導專家與觀課學者。\n" +
+          "【最高任務】：請仔細「聆聽所附的課堂現場真實錄音」，並結合觀課教師所打的時間戳紀錄，為被觀課教師撰寫具備客觀事實、專業具體、有憑有據的觀課分析！\n\n" +
+          "【教學基本情境】：\n" +
+          "- 授課教師：" + (appState.teacherName || "授課教師") + "\n" +
+          "- 授課科目：" + (appState.subjectName || "科目") + "\n" +
+          "- 授課單元：" + (appState.unitName || "單元") + "\n" +
+          "- 授課班級：" + (appState.className || "班級") + "\n" +
+          "- 觀課時長：" + durationText + "\n\n" +
+          "【觀課教師時間戳紀錄】：\n" + (recordsSummary || "（本次觀課教師未輸入額外時間戳）") + "\n\n" +
+          "【絕對嚴格之證據檢驗規準 (Evidence-First Guardrails)】：\n" +
+          "1. 每一項「教學優點與亮點」和「待改進之處」，【必須】具備真實時間標籤（如 [00:10]）以及【錄音中教師或學生的真實對話引言】（以『』引號標註）！\n" +
+          "2. 嚴禁任何無中生有、空泛無物的讚美或批評！\n" +
+          "3. 請以標準 JSON 格式輸出，欄位定義如下：\n" +
+          "{\n" +
+          "  \"scopeLabel\": \"分析範疇標籤\",\n" +
+          "  \"confidence\": \"HIGH 或 MEDIUM\",\n" +
+          "  \"speechClarity\": \"良好 / 一般\",\n" +
+          "  \"strengths\": \"優點與亮點\",\n" +
+          "  \"growth\": \"待改進之處\",\n" +
+          "  \"suggestions\": \"精進建議\"\n" +
+          "}";
+
+        var contentsParts = [];
+        if (cleanAudioB64 && cleanAudioB64.length > 50) {
+          var supportedMime = audioMime.indexOf("mp4") !== -1 ? "audio/mp4" : "audio/webm";
+          contentsParts.push({
+            inlineData: {
+              mimeType: supportedMime,
+              data: cleanAudioB64
+            }
+          });
+        }
+        contentsParts.push({ text: promptText });
+
+        var reqBody = {
+          contents: [{ parts: contentsParts }],
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: "application/json"
+          }
+        };
+
+        return callGeminiWithFallbackAndRetry(reqBody, appState.geminiApiKey, function(statusMsg) {
+          if (progressDesc) progressDesc.innerText = statusMsg;
+        });
+      }).then(function(apiResult) {
+        var rawText = "";
+        try {
+          rawText = apiResult.candidates[0].content.parts[0].text;
+        } catch (e) {
+          throw new Error("Gemini 模型未回傳有效文字");
+        }
+
+        var parsed = null;
+        try {
+          parsed = JSON.parse(rawText);
+        } catch (e) {
+          var clean = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          parsed = JSON.parse(clean);
+        }
+
+        appState.scopeLabel = parsed.scopeLabel || "課堂片段觀察";
+        appState.aiConfidence = parsed.confidence || "HIGH (真實對話佐證)";
+        appState.speechClarity = parsed.speechClarity || "語音清晰辨識";
+        appState.aiStrengths = parsed.strengths || "";
+        appState.aiGrowth = parsed.growth || "";
+        appState.aiSuggestions = parsed.suggestions || "";
+
+        document.getElementById('scopeLabelText').innerText = appState.scopeLabel;
+        document.getElementById('scopeConfidenceText').innerText = appState.aiConfidence;
+        document.getElementById('scopeClarityText').innerText = appState.speechClarity;
+
+        var badge = document.getElementById('aiScopeBadge');
+        if (badge) {
+          badge.innerText = "✅ " + appState.aiConfidence;
+          badge.className = 'text-xs px-2.5 py-1 rounded-full font-bold bg-emerald-900 text-emerald-300';
+        }
+
+        var edS = document.getElementById('editAiStrengths');
+        var edG = document.getElementById('editAiGrowth');
+        var edR = document.getElementById('editAiSuggestions');
+        if (edS) edS.value = appState.aiStrengths;
+        if (edG) edG.value = appState.aiGrowth;
+        if (edR) edR.value = appState.aiSuggestions;
+
+        autoSaveStateToLocalStorage();
+        showToast("🎉 Gemini 課堂真實對話分析完成！", "success");
       }).catch(function(err) {
-        showToast("AI 分析略過，已載入預設專業回饋", "info");
-        document.getElementById('editAiStrengths').value = "1. 教學架構清晰，能精準扣合單元核心概念。\n2. 提問層次分明，有效引導學生表達個人思考與推論。";
-        document.getElementById('editAiGrowth').value = "1. 分組討論時部分小組發言集中在特定學生，可增加輪流發表。\n2. 實討後的綜合歸納時間可再保留更充裕時間。";
-        document.getElementById('editAiSuggestions').value = "1. 建議運用隨機抽籤或白板小卡，提升全員參與度。\n2. 在提問後給予至少 3-5 秒思考靜默時間。";
+        console.error("Gemini 分析失敗:", err);
+        showToast("AI 分析失敗：" + err.message, "error");
+        var edS = document.getElementById('editAiStrengths');
+        if (edS && !edS.value) {
+          edS.value = "【AI 分析提示】連線發生問題：" + err.message + "\n請點擊右上角設定 AI Key 檢查金鑰。";
+        }
       }).finally(function() {
-        document.getElementById('aiAnalyzingProgressBox').classList.add('hidden');
+        if (progressBox) progressBox.classList.add('hidden');
+        appState.isAiAnalyzing = false;
+      });
+    }
+
+    function getStandardNamingBase() {
+      var d = appState.obsDate || '觀課';
+      var t = appState.teacherName || '授課教師';
+      var c = appState.className || '班級';
+      var o = appState.observerName || '觀課教師';
+      return d + '-' + t + '-' + c + '-' + o;
+    }
+
+    function updateAudioStatusInStep4() {
+      var statusText = document.getElementById('audioStatusText');
+      var player = document.getElementById('audioPreviewPlayer');
+      getReadyAudioBlob().then(function(blob) {
+        if (blob && blob.size > 0) {
+          var mb = (blob.size / (1024 * 1024)).toFixed(2);
+          if (statusText) statusText.innerHTML = '錄音檔狀態：<span class="text-emerald-600 font-bold">✅ 已就緒 (' + mb + ' MB)</span>';
+          if (player) {
+            player.src = URL.createObjectURL(blob);
+            player.classList.remove('hidden');
+          }
+        } else {
+          if (statusText) statusText.innerText = '錄音檔狀態：未錄音';
+          if (player) {
+            player.classList.add('hidden');
+            player.src = '';
+          }
+        }
+      });
+    }
+
+    function saveEditsAndProceedToExport() {
+      var edS = document.getElementById('editAiStrengths');
+      var edG = document.getElementById('editAiGrowth');
+      var edR = document.getElementById('editAiSuggestions');
+      if (edS) appState.aiStrengths = edS.value;
+      if (edG) appState.aiGrowth = edG.value;
+      if (edR) appState.aiSuggestions = edR.value;
+
+      var docName = getStandardNamingBase() + '-數位觀課記錄表';
+      var exportDocEl = document.getElementById('exportDocName');
+      if (exportDocEl) exportDocEl.innerText = docName;
+
+      var subFolderEl = document.getElementById('cloudSubfolderName');
+      if (subFolderEl) subFolderEl.innerText = getStandardNamingBase();
+
+      updateAudioStatusInStep4();
+      goToStep(4);
+      autoSaveStateToLocalStorage();
+    }
+
+    function buildStandardHtmlReport(isForWord) {
+      var recordsRows = appState.records.length > 0 ? appState.records.map(function(r) {
+        return '<tr>' +
+          '<td style="border: 1px solid #000; padding: 6px; text-align: center; width: 90px; font-weight: bold; font-family: monospace;">' + escapeHtml(r.timestamp) + '</td>' +
+          '<td style="border: 1px solid #000; padding: 6px; text-align: left;">' + escapeHtml(r.text) + '</td>' +
+          '</tr>';
+      }).join('') : '<tr><td colspan="2" style="border: 1px solid #000; padding: 10px; text-align: center; color: #666;">（本次觀課未手動記錄質性時間序列）</td></tr>';
+
+      var photosHtmlSection = '';
+      if (appState.photos.length > 0) {
+        var photoCards = appState.photos.map(function(p, i) {
+          var imgSrc = isForWord ? ('daguan_photo_' + i + '.jpg') : p.base64;
+          return '<td style="width: 48%; padding: 8px; vertical-align: top; text-align: center; border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 8px;">' +
+            '<img src="' + imgSrc + '" width="300" style="width: 100%; max-width: 320px; height: 180px; object-fit: contain; display: block; margin: 0 auto; border-radius: 4px; background: #ffffff;" alt="課堂現場照片佐證">' +
+            '<div style="font-size: 9pt; color: #1e293b; margin-top: 6px; font-weight: bold;">照片 ' + (i + 1) + ' [' + escapeHtml(p.timestamp) + '] ' + escapeHtml(p.note) + '</div>' +
+            '</td>';
+        });
+
+        var photoRows = '';
+        for (var k = 0; k < photoCards.length; k += 2) {
+          var td1 = photoCards[k];
+          var td2 = (k + 1 < photoCards.length) ? photoCards[k + 1] : '<td style="width: 48%; border: none;"></td>';
+          photoRows += '<tr>' + td1 + '<td style="width: 4%; border: none;"></td>' + td2 + '</tr><tr style="height: 10px;"><td colspan="3" style="border: none;"></td></tr>';
+        }
+
+        photosHtmlSection = '<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 10pt;">' +
+          '<tr style="background-color: #0e7490; color: #fff;">' +
+          '<th style="border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 11pt;">附錄：課堂教學現場影像佐證 (' + appState.photos.length + ' 張)</th>' +
+          '</tr>' +
+          '<tr>' +
+          '<td style="border: 1px solid #000; padding: 10px;">' +
+          '<table style="width: 100%; border-collapse: collapse; border: none;">' + photoRows + '</table>' +
+          '</td>' +
+          '</tr>' +
+          '</table>';
+      }
+
+      return '<div style="font-family: \'Noto Sans TC\', SimSun, sans-serif; max-width: 800px; margin: 0 auto; padding: 24px; color: #000; background: #fff; line-height: 1.5;">' +
+        '<div style="text-align: center; margin-bottom: 20px;">' +
+        '<h1 style="font-size: 20pt; font-weight: bold; margin: 0 0 6px 0; letter-spacing: 1px;">新北市立大觀國民中學 數位觀課記錄表</h1>' +
+        '<p style="font-size: 10pt; color: #444; margin: 0;">公開授課課堂觀察、專業質性回饋與綜合分析紀錄</p>' +
+        '</div>' +
+        '<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 10.5pt;">' +
+        '<tr style="background-color: #0e7490; color: #fff;">' +
+        '<th colspan="4" style="border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 11pt;">第一部分：觀課基本資訊</th>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; width: 18%; font-weight: bold; background: #f8fafc;">授課日期</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; width: 32%;">' + escapeHtml(appState.obsDate) + '</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; width: 18%; font-weight: bold; background: #f8fafc;">授課教師</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; width: 32%;">' + escapeHtml(appState.teacherName) + '</td>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; font-weight: bold; background: #f8fafc;">觀課教師</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px;">' + escapeHtml(appState.observerName) + '</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; font-weight: bold; background: #f8fafc;">授課科目</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px;">' + escapeHtml(appState.subjectName) + '</td>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; font-weight: bold; background: #f8fafc;">授課單元</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px;">' + escapeHtml(appState.unitName) + '</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px; font-weight: bold; background: #f8fafc;">授課班級</td>' +
+        '<td style="border: 1px solid #000; padding: 6px 8px;">' + escapeHtml(appState.className) + '</td>' +
+        '</tr>' +
+        '</table>' +
+        '<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 10pt;">' +
+        '<tr style="background-color: #0e7490; color: #fff;">' +
+        '<th colspan="2" style="border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 11pt;">第二部分：課堂教學質性觀察紀錄 (時間序列歷程)</th>' +
+        '</tr>' +
+        '<tr style="background-color: #f1f5f9; font-weight: bold;">' +
+        '<td style="border: 1px solid #000; padding: 6px; text-align: center; width: 90px;">課堂時間</td>' +
+        '<td style="border: 1px solid #000; padding: 6px; text-align: center;">具體教學活動歷程與師生互動事實</td>' +
+        '</tr>' +
+        recordsRows +
+        '</table>' +
+        photosHtmlSection +
+        '<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 10pt;">' +
+        '<tr style="background-color: #0e7490; color: #fff;">' +
+        '<th style="border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 11pt;">第三部分：課堂教學 AI 智慧分析與綜合專業回饋 (附真實對話佐證)</th>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="border: 1px solid #000; padding: 8px;">' +
+        '<b style="color: #065f46;">一、課堂教學優點與亮點 (Strengths)</b>' +
+        '<div style="margin-top: 4px; white-space: pre-wrap; line-height: 1.6;">' + escapeHtml(appState.aiStrengths || '無特別登錄') + '</div>' +
+        '</td>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="border: 1px solid #000; padding: 8px;">' +
+        '<b style="color: #92400e;">二、課堂待改進之處 (Weaknesses)</b>' +
+        '<div style="margin-top: 4px; white-space: pre-wrap; line-height: 1.6;">' + escapeHtml(appState.aiGrowth || '無特別登錄') + '</div>' +
+        '</td>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="border: 1px solid #000; padding: 8px;">' +
+        '<b style="color: #1e40af;">三、行動精進建議 (Recommendations)</b>' +
+        '<div style="margin-top: 4px; white-space: pre-wrap; line-height: 1.6;">' + escapeHtml(appState.aiSuggestions || '無特別登錄') + '</div>' +
+        '</td>' +
+        '</tr>' +
+        '</table>' +
+        '<table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 10pt;">' +
+        '<tr style="background-color: #0e7490; color: #fff;">' +
+        '<th style="border: 1px solid #000; padding: 6px 8px; text-align: left; font-size: 11pt;">第四部分：議課後心得與回饋想法 (授課教師填寫)</th>' +
+        '</tr>' +
+        '<tr>' +
+        '<td style="border: 1px solid #000; padding: 12px; height: 110px; vertical-align: top; color: #777;">' +
+        '（請於共同備課/議課後手寫或打字填寫課後自我反思與心得...）' +
+        '</td>' +
+        '</tr>' +
+        '</table>' +
+        '<table style="width: 100%; border-collapse: collapse; border: none; margin-top: 25px; font-size: 11pt; font-weight: bold;">' +
+        '<tr>' +
+        '<td style="width: 50%; border: none; padding: 0;">授課教師簽名：____________________<br><span style="font-size: 9.5pt; font-weight: normal; color: #555;">（日期：&nbsp;&nbsp;&nbsp;&nbsp;年&nbsp;&nbsp;&nbsp;&nbsp;月&nbsp;&nbsp;&nbsp;&nbsp;日）</span></td>' +
+        '<td style="width: 50%; border: none; padding: 0;">觀課教師簽名：____________________<br><span style="font-size: 9.5pt; font-weight: normal; color: #555;">（日期：&nbsp;&nbsp;&nbsp;&nbsp;年&nbsp;&nbsp;&nbsp;&nbsp;月&nbsp;&nbsp;&nbsp;&nbsp;日）</span></td>' +
+        '</tr>' +
+        '</table>' +
+        '</div>';
+    }
+
+    function buildWordBlob() {
+      var boundary = "----=_NextPart_DaguanObsDoc_" + Date.now();
+      var htmlContent = buildStandardHtmlReport(true);
+      
+      var parts = [];
+      parts.push("MIME-Version: 1.0\r\n");
+      parts.push("Content-Type: multipart/related; type=\"text/html\"; boundary=\"" + boundary + "\"\r\n\r\n");
+      
+      parts.push("--" + boundary + "\r\n");
+      parts.push("Content-Type: text/html; charset=\"utf-8\"\r\n");
+      parts.push("Content-Transfer-Encoding: 8bit\r\n\r\n");
+      parts.push('<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">\r\n<head><meta charset="utf-8"><title>觀課記錄表</title>\r\n<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->\r\n</head><body>\r\n');
+      parts.push(htmlContent);
+      parts.push('\r\n</body></html>\r\n\r\n');
+      
+      if (appState.photos && appState.photos.length > 0) {
+        for (var i = 0; i < appState.photos.length; i++) {
+          var p = appState.photos[i];
+          var rawB64 = p.base64 || '';
+          var cleanB64 = rawB64;
+          var commaIdx = cleanB64.indexOf(',');
+          if (commaIdx !== -1) {
+            cleanB64 = cleanB64.substring(commaIdx + 1);
+          }
+          var photoName = "daguan_photo_" + i + ".jpg";
+          
+          parts.push("--" + boundary + "\r\n");
+          parts.push("Content-Type: image/jpeg\r\n");
+          parts.push("Content-Transfer-Encoding: base64\r\n");
+          parts.push("Content-Location: " + photoName + "\r\n");
+          parts.push("Content-ID: <" + photoName + ">\r\n\r\n");
+          parts.push(cleanB64 + "\r\n\r\n");
+        }
+      }
+      
+      parts.push("--" + boundary + "--\r\n");
+      return new Blob(parts, { type: 'application/msword' });
+    }
+
+    function blobToBase64(blob) {
+      return new Promise(function(resolve) {
+        if (!blob) { resolve(''); return; }
+        var reader = new FileReader();
+        reader.onloadend = function() {
+          var res = reader.result || '';
+          resolve(res);
+        };
+        reader.onerror = function() { resolve(''); };
+        reader.readAsDataURL(blob);
       });
     }
 
     function getReadyAudioBlob() {
-      if (appState.audioBlob && appState.audioBlob.size > 0) return Promise.resolve(appState.audioBlob);
+      if (appState.audioBlob && appState.audioBlob.size > 0) {
+        return Promise.resolve(appState.audioBlob);
+      }
       return getCachedAudioChunksFromIDB().then(function(chunks) {
         if (chunks && chunks.length > 0) {
-          appState.audioBlob = new Blob(chunks, { type: 'audio/webm' });
-          return appState.audioBlob;
+          var mime = chunks[0].type || 'audio/webm';
+          var assembled = new Blob(chunks, { type: mime });
+          appState.audioBlob = assembled;
+          return assembled;
         }
         return null;
       });
     }
 
-    function blobToBase64(blob) {
-      return new Promise(function(resolve) {
-        var reader = new FileReader();
-        reader.onloadend = function() { resolve(reader.result || ''); };
-        reader.readAsDataURL(blob);
+    function downloadAudioLocally() {
+      getReadyAudioBlob().then(function(blob) {
+        if (!blob || blob.size === 0) {
+          showToast("本次觀課無錄音資料可供下載！", "warning");
+          return;
+        }
+        var ext = blob.type.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
+        var filename = getStandardNamingBase() + '-課堂現場錄音' + ext;
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("已開始下載課堂錄音檔！", "success");
       });
     }
 
-    function saveEditsAndProceedToExport() {
-      appState.aiStrengths = document.getElementById('editAiStrengths').value;
-      appState.aiGrowth = document.getElementById('editAiGrowth').value;
-      appState.aiSuggestions = document.getElementById('editAiSuggestions').value;
-      document.getElementById('cloudSubfolderName').innerText = appState.obsDate + '-' + appState.teacherName + '-' + appState.className + '-' + appState.observerName;
-      updateAudioStatusInStep4();
-      goToStep(4);
-    }
+    /**
+     * 精準修復：將容器安全置於畫面原點 (left: 0; top: 0)，確保 html2pdf 100% 完整擷取所有內容
+     */
+    function generatePdfBlob() {
+      return new Promise(function(resolve) {
+        if (!window.html2pdf) {
+          resolve(null);
+          return;
+        }
 
-    function updateAudioStatusInStep4() {
-      getReadyAudioBlob().then(function(blob) {
-        var status = document.getElementById('audioStatusText');
-        var player = document.getElementById('audioPreviewPlayer');
-        if (blob && blob.size > 0) {
-          status.innerHTML = '錄音檔狀態：<span class="text-emerald-600 font-bold">✅ 已就緒 (' + (blob.size / (1024*1024)).toFixed(2) + ' MB)</span>';
-          player.src = URL.createObjectURL(blob);
-          player.classList.remove('hidden');
-        } else {
-          status.innerText = '錄音檔狀態：未錄音';
-          player.classList.add('hidden');
+        var edS = document.getElementById('editAiStrengths');
+        var edG = document.getElementById('editAiGrowth');
+        var edR = document.getElementById('editAiSuggestions');
+        if (edS && edS.value) appState.aiStrengths = edS.value;
+        if (edG && edG.value) appState.aiGrowth = edG.value;
+        if (edR && edR.value) appState.aiSuggestions = edR.value;
+
+        try {
+          var container = document.createElement('div');
+          container.id = 'daguanPdfRenderContainer';
+          container.style.position = 'absolute';
+          container.style.left = '0';
+          container.style.top = '0';
+          container.style.width = '794px';
+          container.style.backgroundColor = '#ffffff';
+          container.style.color = '#000000';
+          container.style.zIndex = '-99999';
+          container.style.pointerEvents = 'none';
+          container.innerHTML = buildStandardHtmlReport(false);
+          document.body.appendChild(container);
+
+          var opt = {
+            margin:       [8, 8, 8, 8],
+            filename:     getStandardNamingBase() + '-數位觀課記錄表.pdf',
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { 
+              scale: 2, 
+              useCORS: true, 
+              logging: false,
+              scrollX: 0,
+              scrollY: 0,
+              windowWidth: 794
+            },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+          };
+
+          // 給予 400ms 讓瀏覽器完成所有字型與 Base64 影像解碼渲染
+          setTimeout(function() {
+            html2pdf().set(opt).from(container).outputPdf('blob').then(function(pdfBlob) {
+              if (container.parentNode) document.body.removeChild(container);
+              resolve(pdfBlob);
+            }).catch(function(e) {
+              console.warn("html2pdf 編譯失敗:", e);
+              if (container.parentNode) document.body.removeChild(container);
+              resolve(null);
+            });
+          }, 400);
+
+        } catch (err) {
+          console.warn("generatePdfBlob 執行例外:", err);
+          resolve(null);
         }
       });
     }
 
-    function buildWordBlob() {
-      var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body>' +
-        '<h2>新北市立大觀國民中學 數位觀課記錄表</h2>' +
-        '<p>授課教師：' + escapeHtml(appState.teacherName) + ' | 觀課教師：' + escapeHtml(appState.observerName) + '</p>' +
-        '<h3>一、優點</h3><p>' + escapeHtml(appState.aiStrengths).replace(/\n/g, '<br>') + '</p>' +
-        '<h3>二、待改進</h3><p>' + escapeHtml(appState.aiGrowth).replace(/\n/g, '<br>') + '</p>' +
-        '<h3>三、建議</h3><p>' + escapeHtml(appState.aiSuggestions).replace(/\n/g, '<br>') + '</p>' +
-        '</body></html>';
-      return new Blob([html], { type: 'application/msword' });
+    function downloadPdfDocument() {
+      showToast("正在產生標準 PDF 紀錄表，請稍候...", "info");
+      generatePdfBlob().then(function(blob) {
+        if (blob && blob.size > 200) {
+          var filename = getStandardNamingBase() + '-數位觀課記錄表.pdf';
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast("已下載標準 PDF 紀錄表！", "success");
+        } else {
+          printObservationReport();
+        }
+      });
     }
 
     function downloadWordDocument() {
       var blob = buildWordBlob();
+      var filename = getStandardNamingBase() + '-數位觀課記錄表.doc';
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url;
-      a.download = appState.obsDate + '-' + appState.teacherName + '-數位觀課記錄表.doc';
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
-      showToast("已下載 Word 紀錄表", "success");
+      showToast("已下載 Word 格式紀錄表！", "success");
     }
 
-    function downloadAudioLocally() {
-      getReadyAudioBlob().then(function(blob) {
-        if (!blob || blob.size === 0) { showToast("無錄音檔可下載", "warning"); return; }
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = appState.obsDate + '-' + appState.teacherName + '-錄音.webm';
-        a.click();
-        URL.revokeObjectURL(url);
-      });
+    function printObservationReport() {
+      var area = document.getElementById('printArea');
+      if (area) {
+        area.innerHTML = buildStandardHtmlReport();
+        area.classList.remove('hidden');
+        window.print();
+        area.classList.add('hidden');
+      }
     }
 
-    function syncToGoogleDriveAndSheets() {
+    function syncToGoogleDriveAndSheets(andThenResetCallback) {
       var btn = document.getElementById('btnSyncCloud');
       var spinner = document.getElementById('syncSpinner');
       var btnText = document.getElementById('syncBtnText');
-      btn.disabled = true;
-      spinner.classList.remove('hidden');
-      btnText.innerText = '正在上傳雲端...';
+      var resultBox = document.getElementById('cloudSyncResultBox');
+      var linksContainer = document.getElementById('cloudLinksContainer');
+
+      if (btn) btn.disabled = true;
+      if (spinner) spinner.classList.remove('hidden');
+      if (btnText) btnText.innerText = '正在封裝並上傳錄音、照片、PDF、Word 至雲端...';
+      if (resultBox) resultBox.classList.add('hidden');
 
       var wordBlob = buildWordBlob();
 
-      Promise.all([
+      return Promise.all([
         getReadyAudioBlob(),
-        blobToBase64(wordBlob)
-      ]).then(function(res) {
-        var audioBlob = res[0];
-        var wordB64 = res[1];
+        generatePdfBlob()
+      ]).then(function(resBlobs) {
+        var audioBlob = resBlobs[0];
+        var pdfBlob = resBlobs[1];
 
-        return Promise.resolve(audioBlob ? blobToBase64(audioBlob) : "").then(function(audioB64) {
+        return Promise.all([
+          blobToBase64(wordBlob),
+          pdfBlob ? blobToBase64(pdfBlob) : Promise.resolve(""),
+          (audioBlob && audioBlob.size > 0) ? blobToBase64(audioBlob) : Promise.resolve("")
+        ]).then(function(results) {
+          var wordBase64 = results[0];
+          var pdfBase64 = results[1];
+          var audioBase64 = results[2];
+          var audioMime = (audioBlob && audioBlob.type) ? audioBlob.type : "audio/webm";
+
+          var subfolderName = getStandardNamingBase();
+
           var payload = {
-            folderName: appState.obsDate + '-' + appState.teacherName + '-' + appState.className + '-' + appState.observerName,
+            folderName: subfolderName,
             meta: {
               obsDate: appState.obsDate,
               teacherName: appState.teacherName,
               observerName: appState.observerName,
               subjectName: appState.subjectName,
               unitName: appState.unitName,
-              className: appState.className
+              className: appState.className,
+              duration: formatCurrentTimestamp()
             },
             records: appState.records,
             photos: appState.photos,
@@ -978,83 +1825,363 @@
               growth: appState.aiGrowth,
               suggestions: appState.aiSuggestions
             },
-            audioData: audioB64,
-            docxData: wordB64,
-            htmlContent: '<h1>大觀國中觀課表</h1>'
+            audioData: audioBase64,
+            audioMime: audioMime,
+            docxData: wordBase64,
+            pdfData: pdfBase64
           };
 
-          return fetch(appState.gasUrl, {
+          var targetUrl = appState.gasUrl || DEFAULT_GAS_WEB_APP_URL;
+          return fetch(targetUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(payload)
           });
         });
-      }).then(function(r) { return r.json(); }).then(function(res) {
+      }).then(function(resp) {
+        return resp.json();
+      }).then(function(res) {
         if (res.status === 'success') {
-          showToast("🎉 雲端同步成功！已建立 PDF、Word 與音檔！", "success");
-          var box = document.getElementById('cloudSyncResultBox');
-          box.classList.remove('hidden');
-          document.getElementById('cloudLinksContainer').innerHTML = 
-            '<div>📁 <a href="' + res.folderUrl + '" target="_blank" class="text-cyan-700 underline font-bold">開啟雲端子資料夾</a></div>' +
-            '<div>📊 <a href="' + res.spreadsheetUrl + '" target="_blank" class="text-emerald-700 underline font-bold">開啟總表試算表</a></div>' +
-            '<div>📑 <a href="' + res.pdfUrl + '" target="_blank" class="text-rose-700 underline font-bold">線上檢視 PDF 紀錄表 (100% 完整內容)</a></div>';
+          appState.hasSyncedCloud = true;
+          showToast("🎉 觀課記錄、音檔、PDF、Word 與照片已同步至 Google 雲端！", "success");
+          if (resultBox) resultBox.classList.remove('hidden');
+
+          var subfolderName = getStandardNamingBase();
+          var linksHtml = '<div>📁 <b>專屬子資料夾：</b><a href="' + res.folderUrl + '" target="_blank" class="text-cyan-700 underline font-bold">點此開啟 ' + subfolderName + '</a></div>' +
+            '<div>📊 <b>觀課總表試算表：</b><a href="' + res.spreadsheetUrl + '" target="_blank" class="text-emerald-700 underline font-bold">點此開啟「數位觀課總表」</a></div>';
+
+          if (res.pdfUrl) {
+            linksHtml += '<div>📑 <b>PDF 紀錄表 (免下載，線上預覽與列印)：</b><a href="' + res.pdfUrl + '" target="_blank" class="text-emerald-700 underline font-bold">點此線上開啟 PDF 紀錄表</a></div>';
+          }
+          if (res.docxUrl) {
+            linksHtml += '<div>📝 <b>Word 紀錄表 (微軟 Word 下載專用)：</b><a href="' + res.docxUrl + '" target="_blank" class="text-slate-600 underline">下載 .doc 檔案</a></div>';
+          }
+          if (res.audioUrl) {
+            linksHtml += '<div>🎙️ <b>課堂現場錄音檔：</b><a href="' + res.audioUrl + '" target="_blank" class="text-rose-700 underline font-bold">線上收聽錄音檔 (上傳成功)</a></div>';
+          }
+          if (res.photoCount && res.photoCount > 0) {
+            linksHtml += '<div class="text-amber-800 font-semibold">📸 <b>課堂現場照片：</b>已成功同步 ' + res.photoCount + ' 張佐證照片至子資料夾！</div>';
+          }
+
+          if (linksContainer) linksContainer.innerHTML = linksHtml;
+
+          if (typeof andThenResetCallback === 'function') {
+            setTimeout(andThenResetCallback, 1500);
+          }
         } else {
-          throw new Error(res.message);
+          throw new Error(res.message || '後端回傳錯誤');
         }
       }).catch(function(err) {
+        console.error("雲端同步失敗:", err);
         showToast("同步失敗：" + err.message, "error");
       }).finally(function() {
-        btn.disabled = false;
-        spinner.classList.add('hidden');
-        btnText.innerText = '☁️ 一鍵同步歸檔至 Google 雲端硬碟';
+        if (btn) btn.disabled = false;
+        if (spinner) spinner.classList.add('hidden');
+        if (btnText) btnText.innerText = '☁️ 一鍵同步歸檔至 Google 雲端硬碟';
       });
     }
 
-    function initApp() {
-      initIndexedDB();
-      loadSavedGeminiApiKey();
-      tryRestoreStateFromLocalStorage();
-      initDefaultDate();
-
-      document.getElementById('btnOpenGeminiModal').onclick = function() { document.getElementById('geminiKeyModal').classList.remove('hidden'); };
-      document.getElementById('btnCloseGeminiModalX').onclick = function() { document.getElementById('geminiKeyModal').classList.add('hidden'); };
-      document.getElementById('btnSaveGeminiKey').onclick = saveGeminiApiKeyNow;
-      document.getElementById('btnNoticeSetupKey').onclick = function() { document.getElementById('geminiKeyModal').classList.add('hidden'); };
-
-      document.getElementById('btnFillMockData').onclick = fillMockTestData;
-      document.getElementById('btnStartObs').onclick = startObservationFlow;
-      document.getElementById('audioRecordBtn').onclick = toggleAudioRecording;
-      document.getElementById('btnAddRecord').onclick = addCurrentRecord;
-      document.getElementById('btnOpenInAppCamera').onclick = openInAppCamera;
-      document.getElementById('btnCloseCameraModal').onclick = closeInAppCamera;
-      document.getElementById('btnCancelPhoto').onclick = closeInAppCamera;
-      document.getElementById('btnSnapPhoto').onclick = snapPhotoNow;
-      document.getElementById('btnCloseLightbox').onclick = function() { document.getElementById('photoLightboxModal').classList.add('hidden'); };
-      document.getElementById('btnFinishObs').onclick = finishObservationAndProceed;
-      document.getElementById('btnReAnalyze').onclick = runRealGeminiAiAnalysis;
-      document.getElementById('btnBackToStep2').onclick = function() { goToStep(2); };
-      document.getElementById('btnProceedToStep4').onclick = saveEditsAndProceedToExport;
-
-      document.getElementById('btnDownloadAudioLocal').onclick = downloadAudioLocally;
-      document.getElementById('btnDownloadWord').onclick = downloadWordDocument;
-      document.getElementById('btnSyncCloud').onclick = syncToGoogleDriveAndSheets;
-
-      var resetObs = function() {
-        if (confirm("確定要開始下一堂課嗎？")) {
-          localStorage.removeItem('daguan_obs_autosave');
-          clearAudioChunksFromIDB();
-          window.location.reload();
+    function checkRescuableAudio() {
+      getCachedAudioChunksFromIDB().then(function(chunks) {
+        if (chunks && chunks.length > 0) {
+          var banner = document.getElementById('rescueAudioBanner');
+          if (banner) banner.classList.remove('hidden');
         }
-      };
-      document.getElementById('btnNewObsTop').onclick = resetObs;
-      document.getElementById('btnNewObsBottom').onclick = resetObs;
-      document.getElementById('btnManualRescue').onclick = function() { showToast("無救援音檔", "info"); };
+      });
+    }
+
+    function manualInspectAndRescueAudio() {
+      getCachedAudioChunksFromIDB().then(function(chunks) {
+        if (!chunks || chunks.length === 0) {
+          showToast("本機快取內目前沒有未清除的錄音切片！", "info");
+          return;
+        }
+        var mime = chunks[0].type || 'audio/webm';
+        var blob = new Blob(chunks, { type: mime });
+        var sizeMb = (blob.size / (1024 * 1024)).toFixed(2);
+        var ext = mime.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
+        var filename = '救援救回-課堂錄音-' + Date.now() + ext;
+
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("已成功救回並下載快取錄音檔 (" + sizeMb + " MB)！", "success");
+      });
+    }
+
+    function downloadRescuedAudio() {
+      manualInspectAndRescueAudio();
+    }
+
+    function openGasSettingsModal() {
+      var modal = document.getElementById('gasSettingsModal');
+      var input = document.getElementById('settingGasUrl');
+      if (input) input.value = appState.gasUrl;
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeGasSettingsModal() {
+      var modal = document.getElementById('gasSettingsModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function promptStartNewObservation() {
+      if (appState.isRecording) {
+        showToast("請先停止錄音再開新觀課！", "warning");
+        return;
+      }
+
+      var hasData = appState.records.length > 0 || appState.photos.length > 0 || appState.audioBlob !== null || (appState.elapsedSeconds > 10);
+      if (appState.currentStep === 4 && hasData && !appState.hasSyncedCloud) {
+        var unsyncedModal = document.getElementById('unsyncedConfirmModal');
+        if (unsyncedModal) {
+          unsyncedModal.classList.remove('hidden');
+          return;
+        }
+      }
+
+      executeResetToNewObservation();
+    }
+
+    function executeResetToNewObservation() {
+      var keepObserver = appState.observerName;
+      appState.obsDate = '';
+      appState.teacherName = '';
+      appState.subjectName = '';
+      appState.unitName = '';
+      appState.className = '';
+      appState.elapsedSeconds = 0;
+      if (appState.timerInterval) {
+        clearInterval(appState.timerInterval);
+        appState.timerInterval = null;
+      }
+      appState.isObserving = false;
+      appState.records = [];
+      appState.photos = [];
+      appState.recordedChunks = [];
+      appState.audioBlob = null;
+      appState.audioDurationSeconds = 0;
+      appState.hasSyncedCloud = false;
+      appState.aiStrengths = '';
+      appState.aiGrowth = '';
+      appState.aiSuggestions = '';
+
+      clearAudioChunksFromIDB();
+      localStorage.removeItem('daguan_obs_autosave');
+
+      if (document.getElementById('teacherName')) document.getElementById('teacherName').value = '';
+      if (document.getElementById('subjectName')) document.getElementById('subjectName').value = '';
+      if (document.getElementById('unitName')) document.getElementById('unitName').value = '';
+      if (document.getElementById('className')) document.getElementById('className').value = '';
+      if (document.getElementById('observerName')) document.getElementById('observerName').value = keepObserver;
+      if (document.getElementById('observationTimerDisplay')) document.getElementById('observationTimerDisplay').innerText = '00:00';
+      if (document.getElementById('editAiStrengths')) document.getElementById('editAiStrengths').value = '';
+      if (document.getElementById('editAiGrowth')) document.getElementById('editAiGrowth').value = '';
+      if (document.getElementById('editAiSuggestions')) document.getElementById('editAiSuggestions').value = '';
+
+      var resultBox = document.getElementById('cloudSyncResultBox');
+      if (resultBox) resultBox.classList.add('hidden');
+
+      var unsyncedModal = document.getElementById('unsyncedConfirmModal');
+      if (unsyncedModal) unsyncedModal.classList.add('hidden');
+
+      renderPhotosPreviewStrip();
+      initDefaultDate();
+      renderRecordsList();
+      goToStep(1);
+      showToast("已重設觀課環境，歡迎進行下一堂課！", "info");
+    }
+
+    function bindAllEventListeners() {
+      var openGeminiBtn = document.getElementById('btnOpenGeminiModal');
+      if (openGeminiBtn) openGeminiBtn.addEventListener('click', function() {
+        document.getElementById('geminiKeyModal').classList.remove('hidden');
+      });
+
+      var closeGeminiX = document.getElementById('btnCloseGeminiModalX');
+      if (closeGeminiX) closeGeminiX.addEventListener('click', function() {
+        document.getElementById('geminiKeyModal').classList.add('hidden');
+      });
+
+      var saveGeminiBtn = document.getElementById('btnSaveGeminiKey');
+      if (saveGeminiBtn) saveGeminiBtn.addEventListener('click', saveGeminiApiKeyNow);
+
+      var noticeKeyBtn = document.getElementById('btnNoticeSetupKey');
+      if (noticeKeyBtn) noticeKeyBtn.addEventListener('click', function() {
+        document.getElementById('geminiKeyModal').classList.remove('hidden');
+      });
+
+      var openCamBtn = document.getElementById('btnOpenInAppCamera');
+      if (openCamBtn) openCamBtn.addEventListener('click', openInAppCamera);
+
+      var closeCamX = document.getElementById('btnCloseCameraModal');
+      if (closeCamX) closeCamX.addEventListener('click', closeInAppCamera);
+
+      var cancelCamBtn = document.getElementById('btnCancelPhoto');
+      if (cancelCamBtn) cancelCamBtn.addEventListener('click', closeInAppCamera);
+
+      var snapBtn = document.getElementById('btnSnapPhoto');
+      if (snapBtn) snapBtn.addEventListener('click', snapPhotoNow);
+
+      var switchCamBtn = document.getElementById('btnSwitchCamera');
+      if (switchCamBtn) switchCamBtn.addEventListener('click', switchCameraFacing);
+
+      var closeLightbox = document.getElementById('btnCloseLightbox');
+      if (closeLightbox) closeLightbox.addEventListener('click', function() {
+        document.getElementById('photoLightboxModal').classList.add('hidden');
+      });
+
+      var fillBtn = document.getElementById('btnFillMockData');
+      if (fillBtn) fillBtn.addEventListener('click', fillMockTestData);
+
+      var startBtn = document.getElementById('btnStartObs');
+      if (startBtn) startBtn.addEventListener('click', startObservationFlow);
+
+      var recordNoticeBtn = document.getElementById('btnNoticeStartRecord');
+      if (recordNoticeBtn) recordNoticeBtn.addEventListener('click', startAudioRecording);
+
+      var audioBtn = document.getElementById('audioRecordBtn');
+      if (audioBtn) audioBtn.addEventListener('click', toggleAudioRecording);
+
+      var addRecBtn = document.getElementById('btnAddRecord');
+      if (addRecBtn) addRecBtn.addEventListener('click', addCurrentRecord);
+
+      var recInput = document.getElementById('recordInput');
+      if (recInput) {
+        recInput.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            addCurrentRecord();
+          }
+        });
+      }
+
+      var finishBtn = document.getElementById('btnFinishObs');
+      if (finishBtn) finishBtn.addEventListener('click', finishObservationAndProceed);
+
+      var reAnalyzeBtn = document.getElementById('btnReAnalyze');
+      if (reAnalyzeBtn) reAnalyzeBtn.addEventListener('click', runRealGeminiAiAnalysis);
+
+      var backStep2Btn = document.getElementById('btnBackToStep2');
+      if (backStep2Btn) backStep2Btn.addEventListener('click', function() { goToStep(2); });
+
+      var proceedStep4Btn = document.getElementById('btnProceedToStep4');
+      if (proceedStep4Btn) proceedStep4Btn.addEventListener('click', saveEditsAndProceedToExport);
+
+      var dlAudioBtn = document.getElementById('btnDownloadAudioLocal');
+      if (dlAudioBtn) dlAudioBtn.addEventListener('click', downloadAudioLocally);
+
+      var dlPdfBtn = document.getElementById('btnDownloadPdf');
+      if (dlPdfBtn) dlPdfBtn.addEventListener('click', downloadPdfDocument);
+
+      var dlWordBtn = document.getElementById('btnDownloadWord');
+      if (dlWordBtn) dlWordBtn.addEventListener('click', downloadWordDocument);
+
+      var printBtn = document.getElementById('btnPrintReport');
+      if (printBtn) printBtn.addEventListener('click', printObservationReport);
+
+      var syncBtn = document.getElementById('btnSyncCloud');
+      if (syncBtn) syncBtn.addEventListener('click', function() { syncToGoogleDriveAndSheets(); });
+
+      var newObsTop = document.getElementById('btnNewObsTop');
+      if (newObsTop) newObsTop.addEventListener('click', promptStartNewObservation);
+
+      var newObsBottom = document.getElementById('btnNewObsBottom');
+      if (newObsBottom) newObsBottom.addEventListener('click', promptStartNewObservation);
+
+      var modalSyncBtn = document.getElementById('btnModalSyncAndNew');
+      if (modalSyncBtn) {
+        modalSyncBtn.addEventListener('click', function() {
+          var modal = document.getElementById('unsyncedConfirmModal');
+          if (modal) modal.classList.add('hidden');
+          showToast("開始為您自動同步歸檔本次觀課資料...", "info");
+          syncToGoogleDriveAndSheets(function() {
+            executeResetToNewObservation();
+          });
+        });
+      }
+
+      var modalDiscardBtn = document.getElementById('btnModalDiscardAndNew');
+      if (modalDiscardBtn) {
+        modalDiscardBtn.addEventListener('click', function() {
+          executeResetToNewObservation();
+        });
+      }
+
+      var gasModalBtn = document.getElementById('btnGasSettingsModal');
+      if (gasModalBtn) gasModalBtn.addEventListener('click', openGasSettingsModal);
+
+      var closeGasX = document.getElementById('btnCloseGasModalX');
+      if (closeGasX) closeGasX.addEventListener('click', closeGasSettingsModal);
+
+      var closeGasBtn = document.getElementById('btnCloseGasModalBtn');
+      if (closeGasBtn) closeGasBtn.addEventListener('click', closeGasSettingsModal);
+
+      var manualRescueBtn = document.getElementById('btnManualRescue');
+      if (manualRescueBtn) manualRescueBtn.addEventListener('click', manualInspectAndRescueAudio);
+
+      var rescueAudioBtn = document.getElementById('btnDownloadRescuedAudio');
+      if (rescueAudioBtn) rescueAudioBtn.addEventListener('click', downloadRescuedAudio);
+
+      var closeRescueBanner = document.getElementById('btnCloseRescueBanner');
+      if (closeRescueBanner) closeRescueBanner.addEventListener('click', function() {
+        document.getElementById('rescueAudioBanner').remove();
+      });
+
+      var closeInApp = document.getElementById('btnCloseInAppAlert');
+      if (closeInApp) closeInApp.addEventListener('click', function() {
+        document.getElementById('inAppBrowserAlert').remove();
+      });
+
+      [1, 2, 3, 4].forEach(function(i) {
+        var tab = document.getElementById('stepTab' + i);
+        if (tab) {
+          tab.addEventListener('click', function() {
+            if (i <= appState.currentStep || appState.isObserving) {
+              goToStep(i);
+            }
+          });
+        }
+      });
+
+      var quickTags = document.querySelectorAll('.quick-tag-btn');
+      quickTags.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var tag = btn.getAttribute('data-tag');
+          if (tag) insertTag(tag);
+        });
+      });
+
+      window.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'hidden') autoSaveStateToLocalStorage();
+      });
+      window.addEventListener('pagehide', autoSaveStateToLocalStorage);
+      window.addEventListener('beforeunload', autoSaveStateToLocalStorage);
+    }
+
+    function initDaguanSystem() {
+      var isLineOrInApp = /Line|FBAN|FBAV|Instagram/i.test(navigator.userAgent);
+      if (isLineOrInApp) {
+        var alertBanner = document.getElementById('inAppBrowserAlert');
+        if (alertBanner) alertBanner.classList.remove('hidden');
+      }
+
+      bindAllEventListeners();
+      initDefaultDate();
+      loadSavedGeminiApiKey();
+      initIndexedDB().then(function() {
+        tryRestoreStateFromLocalStorage();
+        checkRescuableAudio();
+      });
     }
 
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', initApp);
+      document.addEventListener('DOMContentLoaded', initDaguanSystem);
     } else {
-      initApp();
+      initDaguanSystem();
     }
   </script>
 </body>
